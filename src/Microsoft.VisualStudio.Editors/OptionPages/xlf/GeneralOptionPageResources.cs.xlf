@@ -37,6 +37,16 @@
         <target state="translated">Kontroly aktuálnosti</target>
         <note />
       </trans-unit>
+      <trans-unit id="General_NestingIgnoreSolutionAndProjectProfiles">
+        <source>Ignore solution and project settings</source>
+        <target state="translated">Ignorovat nastavení řešení a projektů</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="General_NestingSettings_Title">
+        <source>File Nesting Settings</source>
+        <target state="translated">Nastavení vnořování souborů</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

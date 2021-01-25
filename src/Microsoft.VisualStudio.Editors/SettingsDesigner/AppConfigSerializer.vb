@@ -59,7 +59,7 @@ Namespace Microsoft.VisualStudio.Editors.SettingsDesigner
             ' 
             Dim ConfigHelperService As New ConfigurationHelperService()
 
-            ' Let us get all settings that we know about, create SettingsPropeties for 'em
+            ' Let us get all settings that we know about, create SettingsProperties for 'em
             ' and add 'em to a SettingsPropertyCollection.
             Dim UserScopedSettingProps As New SettingsPropertyCollection()
             Dim AppScopedSettingProps As New SettingsPropertyCollection()
@@ -80,7 +80,7 @@ Namespace Microsoft.VisualStudio.Editors.SettingsDesigner
                 End If
             Next
 
-            ' Deserialize conenction strings
+            ' Deserialize connection strings
             '
             ' First, we ask the config helper to read all the connection strings....
             Dim DeserializedConnectionStrings As ConnectionStringSettingsCollection =
@@ -134,7 +134,6 @@ Namespace Microsoft.VisualStudio.Editors.SettingsDesigner
                     End If
                 End If
             Next
-
 
             ' Check if we need to add/change any application scoped settings
             '
@@ -190,7 +189,7 @@ Namespace Microsoft.VisualStudio.Editors.SettingsDesigner
                     VSErrorHandler.ThrowOnFailure(ProjSpecialFiles.GetFile(__PSFFILEID.PSFFILEID_AppConfig, Flags, AppConfigItemId, AppConfigFileName))
                 Catch ex As System.Runtime.InteropServices.COMException When ex.ErrorCode = Interop.Win32Constant.OLE_E_PROMPTSAVECANCELLED
                     Throw New ComponentModel.Design.CheckoutException(My.Resources.Microsoft_VisualStudio_Editors_Designer.DFX_UnableToCheckout, ex)
-                Catch ex As Exception When Not TypeOf ex Is ComponentModel.Design.CheckoutException
+                Catch ex As Exception When TypeOf ex IsNot ComponentModel.Design.CheckoutException
                     ' VsWhidbey 224145, ProjSpecialFiles.GetFile(create:=true) fails on vbexpress sku
                     AppConfigItemId = VSITEMID.NIL
                     Debug.Fail(String.Format("ProjSpecialFiles.GetFile (create={0}) failed: {1}", CreateIfNotExists, ex))
@@ -252,7 +251,6 @@ Namespace Microsoft.VisualStudio.Editors.SettingsDesigner
             Dim FullyQualifiedClassName As String = ProjectUtils.FullyQualifiedClassName(NamespaceName, ClassName)
             Serialize(Settings, typeCache, valueCache, ConfigHelperService.GetSectionName(FullyQualifiedClassName, String.Empty), AppConfigDocData, Hierarchy, SynchronizeUserConfig)
         End Sub
-
 
         ''' <summary>
         ''' Write out any and all changes to the app.config file
@@ -433,7 +431,7 @@ Namespace Microsoft.VisualStudio.Editors.SettingsDesigner
         ''' <summary>
         ''' If the value in the app.config file differs from the value in the .settings file,
         ''' or the scope has been changed,
-        ''' propmpt the user if they want to update the value in the .settings file
+        ''' prompt the user if they want to update the value in the .settings file
         ''' </summary>
         ''' <param name="DeserializedPropertyValue"></param>
         ''' <param name="Scope">The scope in which the deserialized property value was found</param>

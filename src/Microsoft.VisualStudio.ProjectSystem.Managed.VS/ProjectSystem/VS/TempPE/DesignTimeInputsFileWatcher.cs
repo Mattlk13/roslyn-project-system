@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.ComponentModel.Composition;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.VisualStudio.Shell;
@@ -18,10 +17,11 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.TempPE
     [AppliesTo(ProjectCapability.CSharpOrVisualBasicLanguageService)]
     internal class DesignTimeInputsFileWatcher : ProjectValueDataSourceBase<string[]>, IVsFreeThreadedFileChangeEvents2, IDesignTimeInputsFileWatcher
     {
+        private readonly UnconfiguredProject _project;
         private readonly IProjectThreadingService _threadingService;
         private readonly IDesignTimeInputsDataSource _designTimeInputsDataSource;
         private readonly IVsService<IVsAsyncFileChangeEx> _fileChangeService;
-        private readonly Dictionary<string, uint> _fileWatcherCookies = new Dictionary<string, uint>(StringComparers.Paths);
+        private readonly Dictionary<string, uint> _fileWatcherCookies = new(StringComparers.Paths);
 
         private int _version;
         private IDisposable? _dataSourceLink;
@@ -49,6 +49,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.TempPE
                                            IVsService<SVsFileChangeEx, IVsAsyncFileChangeEx> fileChangeService)
              : base(unconfiguredProjectServices, synchronousDisposal: false, registerDataSource: false)
         {
+            _project = project;
             _threadingService = threadingService;
             _designTimeInputsDataSource = designTimeInputsDataSource;
             _fileChangeService = fileChangeService;
@@ -80,7 +81,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.TempPE
             _broadcastBlock = DataflowBlockSlim.CreateBroadcastBlock<IProjectVersionedValue<string[]>>(nameFormat: nameof(DesignTimeInputsFileWatcher) + "Broadcast {1}");
             _publicBlock = AllowSourceBlockCompletion ? _broadcastBlock : _broadcastBlock.SafePublicize();
 
-            _actionBlock = DataflowBlockSlim.CreateActionBlock<IProjectVersionedValue<DesignTimeInputs>>(ProcessDesignTimeInputs);
+            _actionBlock = DataflowBlockFactory.CreateActionBlock<IProjectVersionedValue<DesignTimeInputs>>(ProcessDesignTimeInputs, _project);
 
             _dataSourceLink = _designTimeInputsDataSource.SourceBlock.LinkTo(_actionBlock, DataflowOption.PropagateCompletion);
 
@@ -127,12 +128,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.TempPE
             }
         }
 
-        private void PostToOutput(string[] file)
+        private void PublishFiles(string[] files)
         {
             _version++;
-            ImmutableDictionary<NamedIdentity, IComparable> dataSources = ImmutableDictionary<NamedIdentity, IComparable>.Empty.Add(DataSourceKey, DataSourceVersion);
-
-            _broadcastBlock.Post(new ProjectVersionedValue<string[]>(file, dataSources));
+            _broadcastBlock.Post(new ProjectVersionedValue<string[]>(
+                files,
+                Empty.ProjectValueVersions.Add(DataSourceKey, _version)));
         }
 
         protected override void Dispose(bool disposing)
@@ -169,7 +170,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.TempPE
 
         public int FilesChanged(uint cChanges, string[] rgpszFile, uint[] rggrfChange)
         {
-            PostToOutput(rgpszFile);
+            PublishFiles(rgpszFile);
 
             return HResult.OK;
         }

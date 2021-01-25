@@ -37,6 +37,16 @@
         <target state="translated">最新版檢查</target>
         <note />
       </trans-unit>
+      <trans-unit id="General_NestingIgnoreSolutionAndProjectProfiles">
+        <source>Ignore solution and project settings</source>
+        <target state="translated">略過解決方案及專案設定</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="General_NestingSettings_Title">
+        <source>File Nesting Settings</source>
+        <target state="translated">檔案巢狀設定</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -2,6 +2,7 @@
 
 Imports System.Runtime.InteropServices
 
+Imports Microsoft.Internal.VisualStudio.Shell.Interop
 Imports Microsoft.VisualStudio.Designer.Interfaces
 Imports Microsoft.VisualStudio.Editors.AppDesInterop
 Imports Microsoft.VisualStudio.Shell
@@ -15,19 +16,24 @@ Namespace Microsoft.VisualStudio.Editors.ApplicationDesigner
     ';ApplicationDesignerEditorFactory
     '
     'Remarks:
-    '   The editor factory for the resource editor.  The job of this class is
-    '   simply to create a new resource editor designer when requested by the
+    '   The editor factory for the application designer. The job of this class is
+    '   simply to create a new application designer when requested by the
     '   shell.
     '**************************************************************************
     <CLSCompliant(False),
-    Guid("04b8ab82-a572-4fef-95ce-5222444b6b64"),
+    Guid(ApplicationDesignerEditorFactory.EditorGuidString),
     ProvideView(LogicalView.Designer, "Design")>
     Public NotInheritable Class ApplicationDesignerEditorFactory
         Implements IVsEditorFactory
 
+        Friend Const EditorGuidString = "04b8ab82-a572-4fef-95ce-5222444b6b64"
+
         'The all important GUIDs 
-        Private Shared ReadOnly s_editorGuid As New Guid("{04b8ab82-a572-4fef-95ce-5222444b6b64}")
+        Private Shared ReadOnly s_editorGuid As New Guid(EditorGuidString)
         Private Shared ReadOnly s_commandUIGuid As New Guid("{d06cd5e3-d961-44dc-9d80-c89a1a8d9d56}")
+
+        'GUID of the new project properties editor, to delegate to if enabled
+        Private Shared ReadOnly s_newEditorGuid As New Guid("{990036EB-F67A-4B8A-93D4-4663DB2A1033}")
 
         'Exposing the GUID for the rest of the assembly to see
         Public Shared ReadOnly Property EditorGuid As Guid
@@ -43,7 +49,7 @@ Namespace Microsoft.VisualStudio.Editors.ApplicationDesigner
             End Get
         End Property
 
-        Private _site As Object 'The site that owns this editor factory
+        Private _site As OLE.Interop.IServiceProvider 'The site that owns this editor factory
         Private _siteProvider As ServiceProvider 'The service provider from m_Site
 
         ''' <summary>
@@ -147,7 +153,6 @@ Namespace Microsoft.VisualStudio.Editors.ApplicationDesigner
             End Try
         End Function
 
-
         ''' <summary>
         ''' Disconnect from the owning site
         ''' </summary>
@@ -173,6 +178,22 @@ Namespace Microsoft.VisualStudio.Editors.ApplicationDesigner
                 ByRef pgrfCDW As Integer) As Integer _
         Implements IVsEditorFactory.CreateEditorInstance
 
+            ' If we're using the new project properties editor, delegate to its editor factory
+            If UseNewEditor(Hierarchy) Then
+                Return GetNewEditorFactory().CreateEditorInstance(
+                    vscreateeditorflags,
+                    FileName,
+                    PhysicalView,
+                    Hierarchy,
+                    ItemId,
+                    ExistingDocDataPtr,
+                    DocViewPtr,
+                    DocDataPtr,
+                    Caption,
+                    CmdUIGuid,
+                    pgrfCDW)
+            End If
+
             Dim ExistingDocData As Object = Nothing
             Dim DocView As Object = Nothing
             Dim DocData As Object = Nothing
@@ -188,6 +209,7 @@ Namespace Microsoft.VisualStudio.Editors.ApplicationDesigner
 
             Dim hr As Integer = InternalCreateEditorInstance(FileName, Hierarchy, Itemid, ExistingDocData,
                 DocView, DocData, Caption, CmdUIGuid, pgrfCDW)
+
             If NativeMethods.Failed(hr) Then
                 Return hr
             End If
@@ -203,17 +225,55 @@ Namespace Microsoft.VisualStudio.Editors.ApplicationDesigner
             Return hr
         End Function
 
+        Private Function UseNewEditor(vsHierarchy As IVsHierarchy) As Boolean
+            If Not vsHierarchy.IsCapabilityMatch("CPS") Then
+                ' The new editor is only available for CPS-based projects
+                Return False
+            End If
+
+            Dim featureFlags = TryCast(_siteProvider.GetService(GetType(SVsFeatureFlags)), IVsFeatureFlags)
+
+            Return _
+                featureFlags IsNot Nothing AndAlso _
+                featureFlags.IsFeatureEnabled("CPS.UpdatedProjectPropertiesDesigner.Local", False)
+        End Function
+
+        Private Function GetNewEditorFactory() As IVsEditorFactory
+            Dim vsUIShellOpenDocument = TryCast(_siteProvider.GetService(GetType(IVsUIShellOpenDocument)), IVsUIShellOpenDocument)
+
+            Assumes.Present(vsUIShellOpenDocument)
+
+            Dim newEditorGuid = s_newEditorGuid
+            Dim newEditorFactory as IVsEditorFactory = Nothing
+
+            Verify.HResult(vsUIShellOpenDocument.GetStandardEditorFactory(
+                dwReserved := 0,
+                newEditorGuid,
+                pszMkDocument := Nothing,
+                VSConstants.LOGVIEWID.Designer_guid,
+                pbstrPhysicalView := Nothing,
+                newEditorFactory))
+
+            Assumes.Present(newEditorFactory)
+            Return newEditorFactory
+        End Function
+
         ''' <summary>
         ''' We only support the default view
         ''' </summary>
         ''' <param name="rguidLogicalView"></param>
         ''' <param name="pbstrPhysicalView"></param>
         Public Function MapLogicalView(ByRef rguidLogicalView As Guid, ByRef pbstrPhysicalView As String) As Integer Implements IVsEditorFactory.MapLogicalView
+
+            ' NOTE we do not have a hierarchy, so don't know if this is a CPS project. We don't know whether to delegate to
+            ' Microsoft.VisualStudio.ProjectSystem.VS.Implementation.PropertyPages.Designer.ProjectPropertiesEditorFactory.
+            ' Therefore we ensure the logic in both implementations of MapLogicalView is identical.
+
             pbstrPhysicalView = Nothing
 
             ' The designer nominally supports VSConstants.LOGVIEWID.Designer_guid however it is also called with other GUIDs
             ' that are for the various sub-tabs of the property pages
-            ' Rather than hard code those here, we simply allow through everything TextView, as that is
+            ' Rather than hard code those here, we simply allow through everything except TextView, as that is
             ' used when opening files for text editing, and we want the project file to be editable as XML in that scenario
 
             If rguidLogicalView = VSConstants.LOGVIEWID.TextView_guid Then
@@ -234,11 +294,7 @@ Namespace Microsoft.VisualStudio.Editors.ApplicationDesigner
             End If
             'Site is different - set it
             _site = Site
-            If TypeOf Site Is OLE.Interop.IServiceProvider Then
-                _siteProvider = New ServiceProvider(CType(Site, OLE.Interop.IServiceProvider))
-            Else
-                Debug.Fail("Site IsNot OLE.Interop.IServiceProvider")
-            End If
+            _siteProvider = New ServiceProvider(Site)
         End Function
 
     End Class

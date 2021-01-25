@@ -8,6 +8,7 @@ trigger:
   branches:
     include:
     - master
+    - main
     - dev*
     - feature/*
 
@@ -16,12 +17,14 @@ pr:
   branches:
     include:
     - master
+    - main
     - dev*
     - feature/*
-  paths:
-    exclude: # don't trigger the CI if only a doc file was changed
-    - docs/*
-    - README.md
+
+variables:
+  # Opt out of running Codesign Validation (https://aka.ms/gdn-injection)
+  runCodesignValidationInjection: false
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
 jobs:
 - template: unit-tests-template.yml

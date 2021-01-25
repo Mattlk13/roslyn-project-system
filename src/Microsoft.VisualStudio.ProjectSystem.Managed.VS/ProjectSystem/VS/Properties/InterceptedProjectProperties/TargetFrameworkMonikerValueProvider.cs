@@ -3,11 +3,9 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
-using System.Runtime.Versioning;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.ProjectSystem.Properties;
 using Microsoft.VisualStudio.Shell;
-using NuGet.VisualStudio;
 
 namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
 {
@@ -16,17 +14,16 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
     {
         private readonly IUnconfiguredProjectVsServices _unconfiguredProjectVsServices;
         private readonly ProjectProperties _properties;
-        private readonly IVsFrameworkParser _frameworkParser;
 
         [ImportingConstructor]
-        public TargetFrameworkMonikerValueProvider(IUnconfiguredProjectVsServices unconfiguredProjectVsServices, ProjectProperties properties, IVsFrameworkParser frameworkParser)
+        public TargetFrameworkMonikerValueProvider(IUnconfiguredProjectVsServices unconfiguredProjectVsServices, ProjectProperties properties)
         {
             _unconfiguredProjectVsServices = unconfiguredProjectVsServices;
             _properties = properties;
-            _frameworkParser = frameworkParser;
         }
 
         public override async Task<string?> OnSetPropertyValueAsync(
+            string propertyName,
             string unevaluatedPropertyValue,
             IProjectProperties defaultProperties,
             IReadOnlyDictionary<string, string>? dimensionalConditions = null)
@@ -40,8 +37,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
             }
             else if (!string.IsNullOrEmpty(currentTargetFramework))
             {
-                var frameworkName = new FrameworkName(unevaluatedPropertyValue);
-                await defaultProperties.SetPropertyValueAsync(ConfigurationGeneral.TargetFrameworkProperty, _frameworkParser.GetShortFrameworkName(frameworkName));
+                await defaultProperties.SetPropertyValueAsync(ConfigurationGeneral.TargetFrameworkProperty, unevaluatedPropertyValue);
             }
             else
             {

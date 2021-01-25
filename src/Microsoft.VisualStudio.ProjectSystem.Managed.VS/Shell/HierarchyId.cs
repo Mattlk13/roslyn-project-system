@@ -10,25 +10,25 @@ namespace Microsoft.VisualStudio.Shell
         private readonly uint _id;
 
         /// <summary>
-        ///     Represents the root of a project hierarchy and is used to identify the entire hierarchy, as opposed 
+        ///     Represents the root of a project hierarchy and is used to identify the entire hierarchy, as opposed
         ///     to a single item.
         /// </summary>
-        public static readonly HierarchyId Root = new HierarchyId(VSConstants.VSITEMID_ROOT);
+        public static readonly HierarchyId Root = new(VSConstants.VSITEMID_ROOT);
 
         /// <summary>
         ///     Represents the currently selected items, which can include the root of the hierarchy.
         /// </summary>
-        public static readonly HierarchyId Selection = new HierarchyId(VSConstants.VSITEMID_SELECTION);
+        public static readonly HierarchyId Selection = new(VSConstants.VSITEMID_SELECTION);
 
         /// <summary>
         ///     Represents the absence of a project item. This value is used when there is no current selection.
         /// </summary>
-        public static readonly HierarchyId Nil = new HierarchyId(VSConstants.VSITEMID_NIL);
+        public static readonly HierarchyId Nil = new(VSConstants.VSITEMID_NIL);
 
         /// <summary>
         ///     Represent an empty item.
         /// </summary>
-        public static readonly HierarchyId Empty = new HierarchyId(0);
+        public static readonly HierarchyId Empty = new(0);
 
         public HierarchyId(uint id)
         {
@@ -53,7 +53,7 @@ namespace Microsoft.VisualStudio.Shell
         }
 
         /// <summary>
-        ///     Returns a value indicating if the <see cref="HierarchyId"/> represents the currently selected items, 
+        ///     Returns a value indicating if the <see cref="HierarchyId"/> represents the currently selected items,
         ///     which can include the root of the hierarchy.
         /// </summary>
         public bool IsSelection
@@ -70,7 +70,7 @@ namespace Microsoft.VisualStudio.Shell
         }
 
         /// <summary>
-        ///    Returns a value indicating if the <see cref="HierarchyId"/> is <see cref="IsNil"/> or 
+        ///    Returns a value indicating if the <see cref="HierarchyId"/> is <see cref="IsNil"/> or
         ///    <see cref="IsEmpty"/>.
         /// </summary>
         public bool IsNilOrEmpty
@@ -79,7 +79,7 @@ namespace Microsoft.VisualStudio.Shell
         }
 
         /// <summary>
-        ///    Returns a value indicating if the <see cref="HierarchyId"/> represents the absence of a project item. 
+        ///    Returns a value indicating if the <see cref="HierarchyId"/> represents the absence of a project item.
         ///    This value is used when there is no current selection.
         /// </summary>
         public bool IsNil

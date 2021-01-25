@@ -13,7 +13,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.ConnectionPoint
     internal class ConnectionPoint<TSinkType> : IConnectionPoint
             where TSinkType : class
     {
-        private readonly Dictionary<uint, TSinkType> _sinks = new Dictionary<uint, TSinkType>();
+        private readonly Dictionary<uint, TSinkType> _sinks = new();
         private readonly ConnectionPointContainer _container;
         private readonly IEventSource<TSinkType> _source;
 
@@ -36,7 +36,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.ConnectionPoint
                 _sinks.Add(_nextCookie, sink);
                 pdwCookie = _nextCookie;
                 _source.OnSinkAdded(sink);
-                _nextCookie += 1;
+                _nextCookie++;
                 return;
             }
 

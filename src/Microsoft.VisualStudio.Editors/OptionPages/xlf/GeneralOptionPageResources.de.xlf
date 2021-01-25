@@ -37,6 +37,16 @@
         <target state="translated">Aktualitätsprüfungen</target>
         <note />
       </trans-unit>
+      <trans-unit id="General_NestingIgnoreSolutionAndProjectProfiles">
+        <source>Ignore solution and project settings</source>
+        <target state="translated">Lösungs- und Projekteinstellungen ignorieren</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="General_NestingSettings_Title">
+        <source>File Nesting Settings</source>
+        <target state="translated">Einstellungen für Dateischachtelung</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

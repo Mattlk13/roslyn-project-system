@@ -15,17 +15,15 @@ namespace Microsoft.VisualStudio.Threading.Tasks
     {
         private bool _disposed;
         private Task _taskAdded = Task.CompletedTask;
-        private readonly object _syncObject = new object();
-#pragma warning disable IDE0069 // Tests fail if this is disposed
-        private readonly CancellationTokenSource _disposedCancelTokenSource = new CancellationTokenSource();
-#pragma warning restore IDE0069 
+        private readonly object _syncObject = new();
+        private readonly CancellationTokenSource _disposedCancelTokenSource = new();
 
         /// <summary>
         /// Deadlocks will occur if a task returned from ExecuteTask , awaits a task which also calls ExecuteTask. The 2nd one will never get started since
         /// it will be backed up behind the first one completing. The AsyncLocal is used to detect when a task is being executed, and if a downstream one gets
         /// added, it will be executed directly, rather than get queued
         /// </summary>
-        private readonly System.Threading.AsyncLocal<bool> _executingTask = new System.Threading.AsyncLocal<bool>();
+        private readonly System.Threading.AsyncLocal<bool> _executingTask = new();
 
         /// <summary>
         /// Adds a new task to the continuation chain and returns it so that it can be awaited.

@@ -14,14 +14,14 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
 {
     [Export(typeof(IPackageRestoreUnconfiguredInputDataSource))]
     [AppliesTo(ProjectCapability.PackageReferences)]
-    internal partial class PackageRestoreUnconfiguredInputDataSource : ChainedProjectValueDataSourceBase<PackageRestoreUnconfiguredInput>, IPackageRestoreUnconfiguredInputDataSource
+    internal class PackageRestoreUnconfiguredInputDataSource : ChainedProjectValueDataSourceBase<PackageRestoreUnconfiguredInput>, IPackageRestoreUnconfiguredInputDataSource
     {
         private readonly UnconfiguredProject _project;
         private readonly IActiveConfigurationGroupService _activeConfigurationGroupService;
 
         [ImportingConstructor]
         public PackageRestoreUnconfiguredInputDataSource(UnconfiguredProject project, IActiveConfigurationGroupService activeConfigurationGroupService)
-            : base(project.Services, synchronousDisposal: true, registerDataSource: false)
+            : base(project, synchronousDisposal: true, registerDataSource: false)
         {
             _project = project;
             _activeConfigurationGroupService = activeConfigurationGroupService;
@@ -41,7 +41,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
             var disposables = new DisposableBag();
 
             var restoreConfiguredInputSource = new UnwrapCollectionChainedProjectValueDataSource<IReadOnlyCollection<ConfiguredProject>, PackageRestoreConfiguredInput>(
-                _project.Services,
+                _project,
                 projects => projects.Select(project => project.Services.ExportProvider.GetExportedValueOrDefault<IPackageRestoreConfiguredInputDataSource>())
                                     .WhereNotNull() // Filter out those without PackageReference
                                     .Select(DropConfiguredProjectVersions),
@@ -52,9 +52,13 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
             IProjectValueDataSource<IConfigurationGroup<ConfiguredProject>> activeConfiguredProjectsSource = _activeConfigurationGroupService.ActiveConfiguredProjectGroupSource;
             disposables.Add(activeConfiguredProjectsSource.SourceBlock.LinkTo(restoreConfiguredInputSource, DataflowOption.PropagateCompletion));
 
+            // Dataflow from two configurations can depend on a same unconfigured level data source, and processes it at a different speed.
+            // Introduce a forward-only block to prevent regressions in versions.
+            var forwardOnlyBlock = ProjectDataSources.CreateDataSourceVersionForwardOnlyFilteringBlock<IReadOnlyCollection<PackageRestoreConfiguredInput>>();
+            disposables.Add(restoreConfiguredInputSource.SourceBlock.LinkTo(forwardOnlyBlock, DataflowOption.PropagateCompletion));
+
             // Transform all restore data -> combined restore data
-            DisposableValue<ISourceBlock<RestoreInfo>> mergeBlock = restoreConfiguredInputSource.SourceBlock
-                                                                                                .TransformWithNoDelta(update => update.Derive(MergeRestoreInputs));
+            DisposableValue<ISourceBlock<RestoreInfo>> mergeBlock = forwardOnlyBlock.TransformWithNoDelta(update => update.Derive(MergeRestoreInputs));
             disposables.Add(mergeBlock);
 
             // Set the link up so that we publish changes to target block
@@ -125,15 +129,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
 
             if (hasConflicts)
             {
-                ReportDataSourceUserFault(
-                    new Exception(string.Format(
+                ReportUserFault(string.Format(
                         CultureInfo.CurrentCulture,
                         VSResources.Restore_PropertyWithInconsistentValues,
                         propertyName,
                         propertyValue,
-                        update.ProjectConfiguration)),
-                    ProjectFaultSeverity.LimitedFunctionality,
-                    ContainingProject);
+                        update.ProjectConfiguration));
             }
 
             return propertyValue;
@@ -184,10 +185,10 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
                 // them so that they only appear in one TFM.
                 if (!RestoreComparer.ReferenceItems.Equals(existingReference, reference))
                 {
-                    ReportDataSourceUserFault(
-                        new Exception(string.Format(CultureInfo.CurrentCulture, VSResources.Restore_DuplicateToolReferenceItems, existingReference.Name)),
-                        ProjectFaultSeverity.LimitedFunctionality,
-                        ContainingProject);
+                    ReportUserFault(string.Format(
+                        CultureInfo.CurrentCulture,
+                        VSResources.Restore_DuplicateToolReferenceItems,
+                        existingReference.Name));
                 }
 
                 return false;
@@ -200,10 +201,10 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
         {
             if (framework.TargetFrameworkMoniker.Length == 0)
             {
-                ReportDataSourceUserFault(
-                    new Exception(string.Format(CultureInfo.CurrentCulture, VSResources.Restore_EmptyTargetFrameworkMoniker, projectConfiguration.Name)),
-                    ProjectFaultSeverity.LimitedFunctionality,
-                    ContainingProject);
+                ReportUserFault(string.Format(
+                    CultureInfo.CurrentCulture,
+                    VSResources.Restore_EmptyTargetFrameworkMoniker,
+                    projectConfiguration.Name));
 
                 return false;
             }
@@ -215,7 +216,22 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
         {
             // Wrap it in a data source that will drop project version and identity versions so as they will never agree
             // on these versions as they are unique to each configuration. They'll be consistent by all other versions.
-            return new DropConfiguredProjectVersionDataSource<PackageRestoreConfiguredInput>(_project.Services, dataSource);
+            return new DropConfiguredProjectVersionDataSource<PackageRestoreConfiguredInput>(_project, dataSource);
+        }
+
+        private void ReportUserFault(string message)
+        {
+            try
+            {
+                throw new Exception(message);
+            }
+            catch (Exception ex)
+            {
+                ReportDataSourceUserFault(
+                  ex,
+                  ProjectFaultSeverity.LimitedFunctionality,
+                  ContainingProject);
+            }
         }
     }
 }

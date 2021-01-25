@@ -9,20 +9,25 @@ using Microsoft.VisualStudio.Threading;
 namespace Microsoft.VisualStudio.ProjectSystem.LanguageServices
 {
     /// <summary>
-    ///     Provides an implementation of <see cref="IActiveWorkspaceProjectContextHost"/> that delegates 
+    ///     Provides an implementation of <see cref="IActiveWorkspaceProjectContextHost"/> that delegates
     ///     onto the active configuration's <see cref="IWorkspaceProjectContextHost"/>.
     /// </summary>
     [Export(typeof(IActiveWorkspaceProjectContextHost))]
     [AppliesTo(ProjectCapability.DotNetLanguageService)]
     internal class ActiveWorkspaceProjectContextHost : IActiveWorkspaceProjectContextHost
     {
-        private readonly ActiveConfiguredProject<IWorkspaceProjectContextHost> _activeHost;
+        private readonly IActiveConfiguredValue<IWorkspaceProjectContextHost?> _activeHost;
+        private readonly IActiveConfiguredProjectProvider _activeConfiguredProjectProvider;
         private readonly IUnconfiguredProjectTasksService _tasksService;
 
         [ImportingConstructor]
-        public ActiveWorkspaceProjectContextHost(ActiveConfiguredProject<IWorkspaceProjectContextHost> activeHost, IUnconfiguredProjectTasksService tasksService)
+        public ActiveWorkspaceProjectContextHost(
+            IActiveConfiguredValue<IWorkspaceProjectContextHost?> activeHost,
+            IActiveConfiguredProjectProvider activeConfiguredProjectProvider,
+            IUnconfiguredProjectTasksService tasksService)
         {
             _activeHost = activeHost;
+            _activeConfiguredProjectProvider = activeConfiguredProjectProvider;
             _tasksService = tasksService;
         }
 
@@ -33,7 +38,26 @@ namespace Microsoft.VisualStudio.ProjectSystem.LanguageServices
             // Wait until that has been determined before we publish the wrong configuration.
             await _tasksService.PrioritizedProjectLoadedInHost.WithCancellation(cancellationToken);
 
-            await _activeHost.Value.PublishAsync(cancellationToken);
+            while (true)
+            {
+                CancellationToken activeConfigChangedToken = _activeConfiguredProjectProvider.ConfigurationActiveCancellationToken;
+
+                using var tokenSource = CancellationTokenSource.CreateLinkedTokenSource(activeConfigChangedToken, cancellationToken);
+
+                try
+                {
+                    IWorkspaceProjectContextHost? host = _activeHost.Value;
+                    if (host != null)
+                    {
+                        await host.PublishAsync(tokenSource.Token);
+                    }
+
+                    return;
+                }
+                catch (OperationCanceledException) when (activeConfigChangedToken.IsCancellationRequested)
+                {
+                }
+            }
         }
 
         public async Task OpenContextForWriteAsync(Func<IWorkspaceProjectContextAccessor, Task> action)
@@ -42,7 +66,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.LanguageServices
             {
                 try
                 {
-                    await _activeHost.Value.OpenContextForWriteAsync(action);
+                    IWorkspaceProjectContextHost? host = _activeHost.Value;
+                    if (host != null)
+                    {
+                        await host.OpenContextForWriteAsync(action);
+                    }
+
                     return;
                 }
                 catch (ActiveProjectConfigurationChangedException)
@@ -57,7 +86,13 @@ namespace Microsoft.VisualStudio.ProjectSystem.LanguageServices
             {
                 try
                 {
-                    return await _activeHost.Value.OpenContextForWriteAsync(action);
+                    IWorkspaceProjectContextHost? host = _activeHost.Value;
+                    if (host != null)
+                    {
+                        return await host.OpenContextForWriteAsync(action);
+                    }
+
+                    return default!;
                 }
                 catch (ActiveProjectConfigurationChangedException)
                 {   // Host was unloaded because configuration changed, retry on new config

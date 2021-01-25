@@ -3,7 +3,11 @@
 using System;
 using System.Collections.Immutable;
 using System.ComponentModel.Composition;
+using System.Linq;
 using Microsoft.VisualStudio.ProjectSystem.References;
+using Microsoft.VisualStudio.ProjectSystem.VS.References;
+
+using VsReferenceManagerUserImportCollection = Microsoft.VisualStudio.ProjectSystem.OrderPrecedenceImportCollection<Microsoft.VisualStudio.ProjectSystem.VS.References.IVsReferenceManagerUserAsync, Microsoft.VisualStudio.ProjectSystem.VS.References.IVsReferenceManagerUserComponentMetadataView>;
 
 namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Dependencies.Commands
 {
@@ -15,38 +19,33 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Dependencies.Commands
     [Order(ProjectSystem.Order.Default)]
     internal sealed class ReferenceManagerCommandHandler : ICommandGroupHandler
     {
-        public const int CmdidAddAssemblyReference       = 0x200;
-        public const int CmdidAddComReference            = 0x201;
-        public const int CmdidAddProjectReference        = 0x202;
-        public const int CmdidAddSharedProjectReference  = 0x203;
-        public const int CmdidAddSdkReference          = 0x204;
-
-        private readonly UnconfiguredProject _unconfiguredProject;
         private readonly IReferencesUI _referencesUI;
 
         [ImportingConstructor]
-        public ReferenceManagerCommandHandler(UnconfiguredProject unconfiguredProject, IReferencesUI referencesUI)
+        public ReferenceManagerCommandHandler(ConfiguredProject project, IReferencesUI referencesUI)
         {
-            _unconfiguredProject = unconfiguredProject;
             _referencesUI = referencesUI;
+            ReferenceManagerUsers = new VsReferenceManagerUserImportCollection(projectCapabilityCheckProvider: project);
+        }
+
+        [ImportMany]
+        public VsReferenceManagerUserImportCollection ReferenceManagerUsers
+        {
+            get;
         }
 
         public CommandStatusResult GetCommandStatus(IImmutableSet<IProjectTree> items, long commandId, bool focused, string? commandText, CommandStatus progressiveStatus)
         {
-            bool enable = commandId switch
-            {
-                CmdidAddAssemblyReference      => _unconfiguredProject.Capabilities.AppliesTo(ProjectCapabilities.AssemblyReferences),
-                CmdidAddComReference           => _unconfiguredProject.Capabilities.AppliesTo(ProjectCapabilities.ComReferences),
-                CmdidAddProjectReference       => _unconfiguredProject.Capabilities.AppliesTo(ProjectCapabilities.ProjectReferences),
-                CmdidAddSharedProjectReference => _unconfiguredProject.Capabilities.AppliesTo(ProjectCapabilities.SharedProjectReferences),
-                CmdidAddSdkReference           => _unconfiguredProject.Capabilities.AppliesTo(ProjectCapabilities.WinRTReferences) && _unconfiguredProject.Capabilities.AppliesTo(ProjectCapabilities.SdkReferences),
-                _ => false
-            };
-
-            if (enable)
+            if (CanAddReference(commandId))
             {
                 progressiveStatus &= ~CommandStatus.Invisible;
                 progressiveStatus |= CommandStatus.Enabled | CommandStatus.Supported;
+
+                if (items.Any(tree => tree.IsFolder))
+                {   // Hide these commands for Folder -> Add
+                    progressiveStatus |= CommandStatus.InvisibleOnContextMenu;
+                }
+
                 return new CommandStatusResult(handled: true, commandText, progressiveStatus);
             }
 
@@ -55,28 +54,46 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Dependencies.Commands
 
         public bool TryHandleCommand(IImmutableSet<IProjectTree> items, long commandId, bool focused, long commandExecuteOptions, IntPtr variantArgIn, IntPtr variantArgOut)
         {
-            Guid guid = commandId switch
-            {
-                CmdidAddAssemblyReference      => VSConstants.AssemblyReferenceProvider_Guid,
-                CmdidAddComReference           => VSConstants.ComReferenceProvider_Guid,
-                CmdidAddProjectReference       => VSConstants.ProjectReferenceProvider_Guid,
-                CmdidAddSharedProjectReference => VSConstants.SharedProjectReferenceProvider_Guid,
-                CmdidAddSdkReference           => VSConstants.PlatformReferenceProvider_Guid,
-                _ => Guid.Empty
-            };
+            string? identifier = GetReferenceProviderIdentifier(commandId);
 
-            // Other known provider GUIDs:
-            //
-            // - VSConstants.FileReferenceProvider_Guid
-            // - VSConstants.ConnectedServiceInstanceReferenceProvider_Guid
-
-            if (guid != Guid.Empty)
+            if (identifier != null)
             {
-                _referencesUI.ShowReferenceManagerDialog(guid);
+                _referencesUI.ShowReferenceManagerDialog(new Guid(identifier));
                 return true;
             }
 
             return false;
+        }
+
+        private bool CanAddReference(long commandId)
+        {
+            string? identifier = GetReferenceProviderIdentifier(commandId);
+            if (identifier != null)
+            {
+                Lazy<IVsReferenceManagerUserAsync> user = ReferenceManagerUsers.FirstOrDefault(u => u.Metadata.ProviderContextIdentifier == identifier);
+
+                return user?.Value.IsApplicable() == true;
+            }
+
+            return false;
+        }
+
+        private static string? GetReferenceProviderIdentifier(long commandId)
+        {
+            return (VSConstants.VSStd16CmdID)commandId switch
+            {
+                VSConstants.VSStd16CmdID.AddAssemblyReference => VSConstants.AssemblyReferenceProvider_string,
+                VSConstants.VSStd16CmdID.AddComReference => VSConstants.ComReferenceProvider_string,
+                VSConstants.VSStd16CmdID.AddProjectReference => VSConstants.ProjectReferenceProvider_string,
+                VSConstants.VSStd16CmdID.AddSharedProjectReference => VSConstants.SharedProjectReferenceProvider_string,
+                VSConstants.VSStd16CmdID.AddSdkReference => VSConstants.PlatformReferenceProvider_string,
+                _ => null,
+            };
+
+            // Other known provider GUIDs:
+            //
+            // - VSConstants.FileReferenceProvider_string
+            // - VSConstants.ConnectedServiceInstanceReferenceProvider_string
         }
     }
 }

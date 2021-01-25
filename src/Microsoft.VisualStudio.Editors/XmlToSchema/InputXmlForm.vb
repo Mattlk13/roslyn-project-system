@@ -129,7 +129,6 @@ Namespace Microsoft.VisualStudio.Editors.XmlToSchema
             End Using
         End Sub
 
-        <System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")>
         Private Sub _okButtonClick(sender As Object, e As EventArgs) Handles _okButton.Click
             If _listView.Items.Count = 0 Then
                 Return
@@ -180,7 +179,7 @@ Namespace Microsoft.VisualStudio.Editors.XmlToSchema
             End Try
         End Sub
 
-        Private Function GetXmlTextReaderWithDtdProcessingProhibited(element As String) As XmlTextReader
+        Private Shared Function GetXmlTextReaderWithDtdProcessingProhibited(element As String) As XmlTextReader
             ' Required by Fxcop rule CA3054 - DoNotAllowDTDXmlTextReader
             Return New XmlTextReader(element) With {
                 .DtdProcessing = DtdProcessing.Prohibit

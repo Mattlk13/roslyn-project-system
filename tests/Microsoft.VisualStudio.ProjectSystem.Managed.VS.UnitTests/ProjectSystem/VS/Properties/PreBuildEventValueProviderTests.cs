@@ -10,7 +10,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
     public class PreBuildEventValueProviderTests
     {
         private static readonly PreBuildEventValueProvider.PreBuildEventHelper systemUnderTest =
-            new PreBuildEventValueProvider.PreBuildEventHelper();
+            new();
 
         [Fact]
         public static void GetPropertyAsync_AllTargetsPresent()
@@ -649,7 +649,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
             string? actual = systemUnderTest.GetProperty(root);
             Assert.Equal(expected, actual);
         }
-
 
         [Fact]
         public static void EscapeValue_Write_CheckEscaped()

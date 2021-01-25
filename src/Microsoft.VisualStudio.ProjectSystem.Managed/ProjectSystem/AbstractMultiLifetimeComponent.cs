@@ -8,14 +8,14 @@ using Microsoft.VisualStudio.Threading;
 namespace Microsoft.VisualStudio.ProjectSystem
 {
     /// <summary>
-    ///     An <see langword="abstract"/> base class that simplifies the lifetime of 
+    ///     An <see langword="abstract"/> base class that simplifies the lifetime of
     ///     a component that is loaded and unloaded multiple times.
     /// </summary>
     internal abstract class AbstractMultiLifetimeComponent<T> : OnceInitializedOnceDisposedAsync
         where T : class, IMultiLifetimeInstance
     {
-        private readonly object _lock = new object();
-        private TaskCompletionSource<(T instance, JoinableTask initializeAsyncTask)> _instanceTaskSource = new TaskCompletionSource<(T instance, JoinableTask initializeAsyncTask)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly object _lock = new();
+        private TaskCompletionSource<(T instance, JoinableTask initializeAsyncTask)> _instanceTaskSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         protected AbstractMultiLifetimeComponent(JoinableTaskContextNode joinableTaskContextNode)
              : base(joinableTaskContextNode)

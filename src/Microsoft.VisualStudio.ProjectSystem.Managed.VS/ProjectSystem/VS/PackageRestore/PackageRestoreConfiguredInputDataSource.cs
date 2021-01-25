@@ -11,7 +11,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
 {
     /// <summary>
     ///     Provides an implementation of <see cref="IPackageRestoreConfiguredInputDataSource"/> that combines evaluations results
-    ///     of <see cref="DotNetCliToolReference"/>, <see cref="ProjectReference"/> and project build versions of <see cref="PackageReference"/> 
+    ///     of <see cref="DotNetCliToolReference"/>, <see cref="ProjectReference"/> and project build versions of <see cref="PackageReference"/>
     ///     into <see cref="PackageRestoreConfiguredInput"/>.
     /// </summary>
     [Export(typeof(IPackageRestoreConfiguredInputDataSource))]
@@ -25,13 +25,13 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
                                                                         .Add(CollectedFrameworkReference.SchemaName)        // Project Build
                                                                         .Add(CollectedPackageDownload.SchemaName)           // Project Build                                                                        
                                                                         .Add(CollectedPackageVersion.SchemaName)            // Project Build
-                                                                        .Add(PackageReference.SchemaName);                  // Project Build
+                                                                        .Add(CollectedPackageReference.SchemaName);         // Project Build
         private readonly UnconfiguredProject _containingProject;
         private readonly IProjectSubscriptionService _projectSubscriptionService;
 
         [ImportingConstructor]
         public PackageRestoreConfiguredInputDataSource(ConfiguredProject project, IProjectSubscriptionService projectSubscriptionService)
-            : base(project.Services, synchronousDisposal: true, registerDataSource: false)
+            : base(project, synchronousDisposal: true, registerDataSource: false)
         {
             _containingProject = project.UnconfiguredProject;
             _projectSubscriptionService = projectSubscriptionService;

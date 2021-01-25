@@ -6,23 +6,25 @@ using System.Collections.Generic;
 
 namespace Microsoft.VisualStudio.ProjectSystem
 {
-    internal sealed class SetDiff<T>
+    internal sealed class SetDiff<T> where T : notnull
     {
         private const byte FlagBefore = 0;
         private const byte FlagAfter = 1;
 
         private readonly Dictionary<T, byte> _dic;
 
-        public Part Removed => new Part(_dic, FlagBefore);
+        public Part Removed => new(_dic, FlagBefore);
 
-        public Part Added => new Part(_dic, FlagAfter);
+        public Part Added => new(_dic, FlagAfter);
 
-        public SetDiff(IEnumerable<T> before, IEnumerable<T> after)
+        public SetDiff(IEnumerable<T> before, IEnumerable<T> after, IEqualityComparer<T>? equalityComparer = null)
         {
             Requires.NotNull(before, nameof(before));
             Requires.NotNull(after, nameof(after));
 
-            var dic = new Dictionary<T, byte>();
+            equalityComparer ??= EqualityComparer<T>.Default;
+
+            var dic = new Dictionary<T, byte>(equalityComparer);
 
             foreach (T item in before)
             {
@@ -51,7 +53,7 @@ namespace Microsoft.VisualStudio.ProjectSystem
                 _flag = flag;
             }
 
-            public PartEnumerator GetEnumerator() => new PartEnumerator(_dic, _flag);
+            public PartEnumerator GetEnumerator() => new(_dic, _flag);
 
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 

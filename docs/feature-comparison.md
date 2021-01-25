@@ -25,7 +25,7 @@ Show build (design-time) errors & warnings in Error List as you make them   |   
 Debug multiple frameworks from single project                               |          | ●
 Debug with multiple environments from single project ("launch profiles")    |          | ●
 Debug settings persistence                                                  |project.csproj.user|launchsettings.json
-Modify environment variables on debug                                       |          | ● 
+Influence environment variables on debug                                    |          | ● 
 Launch with native debugging                                                | ●        | ●
 Launch with SQL Server debugging                                            | ●        | 16.4
 Launch with remote debugging                                                | ●        | 16.5
@@ -46,6 +46,7 @@ Automatically refresh Solution Explorer to reflect file system              |   
 Show items included in imports (.targets/.props)                            |          | ●
 **Dependencies**|
 Auto-restore packages on load and external edit                             |          | ● 
+Packages.config support                                                     | ●        |
 PackageReference support                                                    | ●        | ●
 Dependency node showing package/project graph                               |          | ● 
 Transitive ProjectReference                                                 |          | ●
@@ -54,12 +55,13 @@ Generate NuGet package on build                                             |   
 Add Service Reference                                                       | ●        | 
 Add Web Reference                                                           | ●        | 
 Add Data Source                                                             | ●        | 16.4
-DataSet Designer                                                            | ●        |
+Settings Designer                                                           | ●        | ● | Added support for .NET Core 3.0 in 16.7
+DataSet Designer                                                            | ●        | ●
 "Initialize Interactive Window with Project"                                | ●        | ● | Only when targeting .NET Framework.
 Class Diagrams                                                              | ●        | ●
 Code Analysis                                                               | ●        | 
 Code Metrics                                                                | ●        | ● 
 Code Clones                                                                 | ●        | ●
-Fakes                                                                       | ●        | 
+Fakes                                                                       | ●        | 16.7
 T4 Templates                                                                | ●        | 
 [Automation Extenders](https://msdn.microsoft.com/en-us/library/0y92k2w2.aspx)| ●      | ●

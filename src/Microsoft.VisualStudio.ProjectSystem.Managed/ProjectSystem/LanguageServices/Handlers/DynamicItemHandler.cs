@@ -18,7 +18,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.LanguageServices.Handlers
         private const string RazorPagesExtension = ".cshtml";
         private const string RazorComponentsExtension = ".razor";
         private readonly UnconfiguredProject _project;
-        private readonly HashSet<string> _paths = new HashSet<string>(StringComparers.Paths);
+        private readonly HashSet<string> _paths = new(StringComparers.Paths);
 
         [ImportingConstructor]
         public DynamicItemHandler(UnconfiguredProject project)
@@ -31,7 +31,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.LanguageServices.Handlers
             get { return Content.SchemaName; }
         }
 
-        public void Handle(IComparable version, IProjectChangeDescription projectChange, bool isActiveContext, IProjectLogger logger)
+        public void Handle(IComparable version, IProjectChangeDescription projectChange, ContextState state, IProjectLogger logger)
         {
             Requires.NotNull(version, nameof(version));
             Requires.NotNull(projectChange, nameof(projectChange));

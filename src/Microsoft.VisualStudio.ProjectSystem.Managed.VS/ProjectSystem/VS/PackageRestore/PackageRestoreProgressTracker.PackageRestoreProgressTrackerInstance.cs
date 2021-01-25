@@ -75,7 +75,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
             protected override Task InitializeCoreAsync(CancellationToken cancellationToken)
             {
                 _joinedDataSources = ProjectDataSources.JoinUpstreamDataSources(JoinableFactory, _projectFaultHandlerService, _projectSubscriptionService.ProjectSource, _dataSource);
-                
+
                 _progressRegistration = _dataProgressTrackerService.RegisterOutputDataSource(this);
 
                 Action<IProjectVersionedValue<ValueTuple<IProjectSnapshot, RestoreData>>> action = OnRestoreCompleted;
@@ -83,8 +83,9 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
                 _subscription = ProjectDataSources.SyncLinkTo(
                     _projectSubscriptionService.ProjectSource.SourceBlock.SyncLinkOptions(),
                     _dataSource.SourceBlock.SyncLinkOptions(),
-                        DataflowBlockSlim.CreateActionBlock(action),
-                        linkOptions: DataflowOption.PropagateCompletion);
+                        DataflowBlockFactory.CreateActionBlock(action, ConfiguredProject.UnconfiguredProject, ProjectFaultSeverity.LimitedFunctionality),
+                        linkOptions: DataflowOption.PropagateCompletion,
+                        cancellationToken: cancellationToken);
 
                 return Task.CompletedTask;
             }

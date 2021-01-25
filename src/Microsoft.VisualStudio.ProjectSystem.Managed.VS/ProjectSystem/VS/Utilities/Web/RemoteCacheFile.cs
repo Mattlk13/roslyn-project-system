@@ -26,8 +26,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Utilities
 
         public bool CacheFileIsStale()
         {
-            return !_fileSystem.FileExists(_cacheFilePath) ||
-                   _fileSystem.LastFileWriteTimeUtc(_cacheFilePath).Add(_cacheExpiration) < DateTime.UtcNow;
+            return _fileSystem.GetLastFileWriteTimeOrMinValueUtc(_cacheFilePath).Add(_cacheExpiration) < DateTime.UtcNow;
         }
 
         /// <summary>
@@ -45,13 +44,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Utilities
             }
             catch (System.IO.IOException)
             {
-
             }
             return null;
         }
 
         /// <summary>
-        /// Downloads from the downloadUri to the cached file. 
+        /// Downloads from the downloadUri to the cached file.
         /// </summary>
         public async Task TryToUpdateCacheFileAsync(Action? callBackOnSuccess = null)
         {

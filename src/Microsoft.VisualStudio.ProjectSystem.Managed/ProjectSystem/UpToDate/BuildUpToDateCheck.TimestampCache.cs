@@ -22,16 +22,21 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                 _timestampCache = new Dictionary<string, DateTime>(StringComparers.Paths);
             }
 
+            /// <summary>
+            /// Gets the number of unique files added to this cache.
+            /// </summary>
+            public int Count => _timestampCache.Count;
+
             public DateTime? GetTimestampUtc(string path)
             {
                 if (!_timestampCache.TryGetValue(path, out DateTime time))
                 {
-                    if (!_fileSystem.FileExists(path))
+                    if (!_fileSystem.TryGetLastFileWriteTimeUtc(path, out DateTime? newTime))
                     {
                         return null;
                     }
 
-                    time = _fileSystem.LastFileWriteTimeUtc(path);
+                    time = newTime.Value;
                     _timestampCache[path] = time;
                 }
 

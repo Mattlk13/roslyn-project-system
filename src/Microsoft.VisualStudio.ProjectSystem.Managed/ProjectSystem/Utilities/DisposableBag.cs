@@ -16,14 +16,14 @@ namespace Microsoft.VisualStudio.ProjectSystem.Utilities
         /// <summary>
         /// The set of disposable blocks. If <see langword="null" />, then this disposable bag has been disposed.
         /// </summary>
-        private ImmutableHashSet<IDisposable?>? _disposables = ImmutableHashSet.Create<IDisposable?>();
+        private ImmutableHashSet<IDisposable>? _disposables = ImmutableHashSet.Create<IDisposable>();
 
         /// <summary>
         /// Disposes of all contained disposable items.
         /// </summary>
         public void Dispose()
         {
-            ImmutableHashSet<IDisposable?>? disposables = Interlocked.Exchange(ref _disposables, null);
+            ImmutableHashSet<IDisposable>? disposables = Interlocked.Exchange(ref _disposables, null);
 
             if (disposables != null)
             {
@@ -49,7 +49,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.Utilities
             }
 
             bool shouldDisposeArgument = false;
-
             ImmutableInterlocked.Update(
                 ref _disposables,
                 (set, item) =>

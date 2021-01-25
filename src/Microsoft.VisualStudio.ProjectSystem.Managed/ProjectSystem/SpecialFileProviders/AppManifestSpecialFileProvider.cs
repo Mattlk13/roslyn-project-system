@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace Microsoft.VisualStudio.ProjectSystem.SpecialFileProviders
 {
     /// <summary>
-    ///     Provides a <see cref="ISpecialFileProvider"/> that handles the default 'app.manifest' file; 
+    ///     Provides a <see cref="ISpecialFileProvider"/> that handles the default 'app.manifest' file;
     ///     which contains Win32 directives for assembly binding, compatibility and elevation and is
     ///     typically found under the 'AppDesigner' folder.
     /// </summary>
@@ -31,7 +31,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.SpecialFileProviders
 
         protected override async Task CreateFileCoreAsync(string path)
         {
-            await _templateFileCreationService.CreateFileAsync("ResourceInternal.zip", path);
+            await _templateFileCreationService.CreateFileAsync("AppManifestInternal.zip", path);
         }
 
         protected override async Task<IProjectTree?> FindFileAsync(IProjectTreeProvider provider, IProjectTree root)

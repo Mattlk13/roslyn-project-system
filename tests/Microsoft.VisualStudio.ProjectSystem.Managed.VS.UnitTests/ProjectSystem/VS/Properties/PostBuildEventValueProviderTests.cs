@@ -10,7 +10,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
     public class PostBuildEventValueProviderTests
     {
         private static readonly PostBuildEventValueProvider.PostBuildEventHelper systemUnderTest =
-            new PostBuildEventValueProvider.PostBuildEventHelper();
+            new();
 
         [Fact]
         public static void GetPropertyAsync_AllTargetsPresent()
@@ -642,7 +642,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
             string? actual = systemUnderTest.GetProperty(root);
             Assert.Equal(expected, actual);
         }
-
 
         [Fact]
         public static void EscapeValue_Write_CheckEscaped()

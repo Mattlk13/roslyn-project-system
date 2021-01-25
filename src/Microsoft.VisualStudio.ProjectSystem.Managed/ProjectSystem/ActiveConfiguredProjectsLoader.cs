@@ -8,7 +8,7 @@ using System.Threading.Tasks.Dataflow;
 namespace Microsoft.VisualStudio.ProjectSystem
 {
     /// <summary>
-    ///     Force loads the active <see cref="ConfiguredProject"/> objects so that any configured project-level 
+    ///     Force loads the active <see cref="ConfiguredProject"/> objects so that any configured project-level
     ///     services, such as evaluation and build services, are started.
     /// </summary>
     internal class ActiveConfiguredProjectsLoader : OnceInitializedOnceDisposed
@@ -26,7 +26,7 @@ namespace Microsoft.VisualStudio.ProjectSystem
             _project = project;
             _activeConfigurationGroupService = activeConfigurationGroupService;
             _tasksService = tasksService;
-            _targetBlock = DataflowBlockSlim.CreateActionBlock<IProjectVersionedValue<IConfigurationGroup<ProjectConfiguration>>>(OnActiveConfigurationsChanged);
+            _targetBlock = DataflowBlockFactory.CreateActionBlock<IProjectVersionedValue<IConfigurationGroup<ProjectConfiguration>>>(OnActiveConfigurationsChanged, project, ProjectFaultSeverity.LimitedFunctionality);
         }
 
         [ProjectAutoLoad(ProjectLoadCheckpoint.ProjectInitialCapabilitiesEstablished)]

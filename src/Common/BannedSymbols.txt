@@ -13,6 +13,8 @@ T:Microsoft.VisualStudio.ProjectSystem.IProjectLockService; Using IProjectAccess
 T:Microsoft.VisualStudio.ProjectSystem.VS.IProjectGuidService; Using ISafeProjectGuidService avoids reading the GUID before it is safe to do so during initialisation
 T:Microsoft.VisualStudio.ProjectSystem.VS.IProjectGuidService2; Using ISafeProjectGuidService avoids reading the GUID before it is safe to do so during initialisation
 
+T:NuGet.VisualStudio.IVsFrameworkParser; FrameworkName does not support the platform information added in .NET 5
+
 P:Microsoft.VisualStudio.ProjectSystem.VS.IProjectAsyncLoadDashboard.ProjectLoadedInHost; Using IUnconfiguredProjectTasksService.ProjectLoadedInHost prevents waiting indefinitely when the project is closed before it has finished loading
 
 M:Microsoft.VisualStudio.ProjectSystem.CommonProjectSystemTools.LoadedProject(Microsoft.VisualStudio.ProjectSystem.IProjectAsynchronousTasksService); Using IUnconfiguredProjectTasksService.LoadedProjectAsync is unit testable
@@ -56,9 +58,14 @@ M:Microsoft.VisualStudio.Telemetry.PostFault(Microsoft.VisualStudio.Telemetry.Te
 
 M:Microsoft.VisualStudio.ProjectSystem.IProjectThreadingService.Fork(System.Func{System.Threading.Tasks.Task},Microsoft.VisualStudio.Threading.JoinableTaskFactory,Microsoft.VisualStudio.ProjectSystem.UnconfiguredProject,Microsoft.VisualStudio.ProjectSystem.ConfiguredProject,Microsoft.VisualStudio.ProjectSystem.ErrorReportSettings,Microsoft.VisualStudio.ProjectSystem.ProjectFaultSeverity,Microsoft.VisualStudio.ProjectSystem.ForkOptions); Use IProjectThreadingService.RunAndForget to ensure non-fatal watsons are assigned to the correct component
 
-T:System.Threading.Tasks.Dataflow.ActionBlock`1;Use DataflowUtilities.LinkToAction/LinkToAsyncAction or DataflowBlockSlim.CreateActionBlock to reduce memory and avoid the overhead of the built-in blocks
+T:System.Threading.Tasks.Dataflow.ActionBlock`1;Use DataflowUtilities.LinkToAction/LinkToAsyncAction or DataflowBlockFactory.CreateActionBlock to reduce memory and avoid the overhead of the built-in blocks
 T:System.Threading.Tasks.Dataflow.BroadcastBlock`1;Use DataflowBlockSlim.CreateBroadcastBlock to reduce memory and avoid the overhead of the built-in blocks
 T:System.Threading.Tasks.Dataflow.TransformManyBlock`2;Use DataflowBlockSlim.CreateTransformManyBlock to reduce memory and avoid the overhead of the built-in blocks
+
+M:Microsoft.VisualStudio.ProjectSystem.DataflowBlockSlim.CreateActionBlock`1(System.Action{``0},System.Threading.Tasks.Dataflow.ExecutionDataflowBlockOptions);Use DataflowBlockFactory.CreateActionBlock to ensure failed blocks are reported as non-fatal watsons and assigned to the correct component
+M:Microsoft.VisualStudio.ProjectSystem.DataflowBlockSlim.CreateActionBlock`1(System.Func{``0,System.Threading.Tasks.Task},System.Threading.Tasks.Dataflow.ExecutionDataflowBlockOptions);Use DataflowBlockFactory.CreateActionBlock to ensure failed blocks are reported as non-fatal watsons and assigned to the correct component
+M:Microsoft.VisualStudio.ProjectSystem.DataflowBlockSlim.CreateActionBlock`1(System.Action{``0},System.String,System.Threading.CancellationToken,System.Boolean);Use DataflowBlockFactory.CreateActionBlock to ensure failed blocks are reported as non-fatal watsons and assigned to the correct component
+M:Microsoft.VisualStudio.ProjectSystem.DataflowBlockSlim.CreateActionBlock`1(System.Func{``0,System.Threading.Tasks.Task},System.String,System.Threading.CancellationToken,System.Boolean);Use DataflowBlockFactory.CreateActionBlock to ensure failed blocks are reported as non-fatal watsons and assigned to the correct component
 
 F:Microsoft.VisualStudio.VSConstants.S_OK;Use HResult.OK or HResult.IsOK
 F:Microsoft.VisualStudio.VSConstants.E_FAIL;Use HResult.Fail or HResult.Failed
@@ -81,3 +88,8 @@ T:System.Threading.Tasks.Dataflow.DataflowLinkOptions;Use DataflowOption.Propaga
 
 M:Microsoft.VisualStudio.ProjectSystem.OnceInitializedOnceDisposed.Initialize();Did you mean EnsureInitialized?
 M:Microsoft.VisualStudio.ProjectSystem.OnceInitializedOnceDisposedAsync.InitializeCoreAsync(System.Threading.CancellationToken);Did you mean InitializeAsync(CancellationToken)?
+
+M:System.Diagnostics.Debugger.Break(); This should not be used in production code as the resulting dialog is not meant to be shown to users.
+M:System.Diagnostics.Debugger.Launch(); This should not be used in production code as the resulting dialog is not meant to be shown to users.
+
+T:Microsoft.VisualStudio.ProjectSystem.ActiveConfiguredProject`1; Use IActiveConfiguredValue<T>, and handle when Value returns null.

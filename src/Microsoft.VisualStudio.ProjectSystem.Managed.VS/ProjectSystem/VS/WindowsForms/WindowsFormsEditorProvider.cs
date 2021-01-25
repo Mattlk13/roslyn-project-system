@@ -10,10 +10,10 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.WindowsForms
 {
     /// <summary>
     ///     A project-specific editor provider that is responsible for handling two things;
-    ///     
-    ///     1) Add the Windows Forms designer to the list of editor factories for a "designable" source file, and 
+    ///
+    ///     1) Add the Windows Forms designer to the list of editor factories for a "designable" source file, and
     ///        determines whether it opens by default.
-    ///     
+    ///
     ///     2) Persists whether the designer opens by default when the user uses Open With -> Set As Default.
     /// </summary>
     [Export(typeof(IProjectSpecificEditorProvider))]
@@ -29,16 +29,18 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.WindowsForms
             new SubTypeDescriptor("Component",      VSResources.ComponentEditor_DisplayName,   useDesignerByDefault: false)
         };
 
+        private readonly UnconfiguredProject _project;
         private readonly Lazy<IPhysicalProjectTree> _projectTree;
         private readonly Lazy<IProjectSystemOptions> _options;
 
         [ImportingConstructor]
-        public WindowsFormsEditorProvider(UnconfiguredProject unconfiguredProject, Lazy<IPhysicalProjectTree> projectTree, Lazy<IProjectSystemOptions> options)
+        public WindowsFormsEditorProvider(UnconfiguredProject project, Lazy<IPhysicalProjectTree> projectTree, Lazy<IProjectSystemOptions> options)
         {
+            _project = project;
             _projectTree = projectTree;
             _options = options;
 
-            ProjectSpecificEditorProviders = new OrderPrecedenceImportCollection<IProjectSpecificEditorProvider, INamedExportMetadataView>(projectCapabilityCheckProvider: unconfiguredProject);
+            ProjectSpecificEditorProviders = new OrderPrecedenceImportCollection<IProjectSpecificEditorProvider, INamedExportMetadataView>(projectCapabilityCheckProvider: project);
         }
 
         [ImportMany]
@@ -101,12 +103,22 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.WindowsForms
         private async Task<string?> GetSubTypeAsync(string documentMoniker)
         {
             IProjectItemTree? item = await FindCompileItemByMonikerAsync(documentMoniker);
+            if (item == null)
+                return null;
 
-            IRule? browseObject = item?.BrowseObjectProperties;
+            ConfiguredProject? project = await _project.GetSuggestedConfiguredProjectAsync();
+
+            IRule? browseObject = GetBrowseObjectProperties(project!, item);
             if (browseObject == null)
                 return null;
 
             return await browseObject.GetPropertyValueAsync(Compile.SubTypeProperty);
+        }
+
+        protected virtual IRule? GetBrowseObjectProperties(ConfiguredProject project, IProjectItemTree item)
+        {
+            // For unit testing purposes
+            return item.GetBrowseObjectPropertiesViaSnapshotIfAvailable(project);
         }
 
         private async Task<IProjectItemTree?> FindCompileItemByMonikerAsync(string documentMoniker)
@@ -114,8 +126,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.WindowsForms
             IProjectTreeServiceState result = await _projectTree.Value.TreeService.PublishAnyNonLoadingTreeAsync();
 
             if (result.TreeProvider.FindByPath(result.Tree, documentMoniker) is IProjectItemTree treeItem &&
-                treeItem.Parent != null &&
-                !treeItem.Parent.Flags.Contains(ProjectTreeFlags.SourceFile) &&
+                treeItem.Parent?.Flags.Contains(ProjectTreeFlags.SourceFile) == false &&
                 StringComparers.ItemTypes.Equals(treeItem.Item?.ItemType, Compile.SchemaName))
             {
                 return treeItem;

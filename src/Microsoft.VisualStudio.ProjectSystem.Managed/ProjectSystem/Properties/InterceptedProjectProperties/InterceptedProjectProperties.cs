@@ -6,8 +6,6 @@ using System.Collections.Immutable;
 using System.Threading.Tasks;
 using Microsoft.Build.Framework.XamlTypes;
 
-#nullable disable
-
 namespace Microsoft.VisualStudio.ProjectSystem.Properties
 {
     /// <summary>
@@ -27,12 +25,17 @@ namespace Microsoft.VisualStudio.ProjectSystem.Properties
             ImmutableDictionary<string, Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata>>.Builder builder = ImmutableDictionary.CreateBuilder<string, Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata>>(StringComparers.PropertyNames);
             foreach (Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata> valueProvider in valueProviders)
             {
-                string propertyName = valueProvider.Metadata.PropertyName;
+                string[] propertyNames = valueProvider.Metadata.PropertyNames;
 
-                // CONSIDER: Allow duplicate intercepting property value providers for same property name.
-                Requires.Argument(!builder.ContainsKey(propertyName), nameof(valueProviders), "Duplicate property value providers for same property name");
+                foreach (string propertyName in propertyNames)
+                {
+                    Requires.Argument(!string.IsNullOrEmpty(propertyName), nameof(valueProvider), "A null or empty property name was found");
 
-                builder.Add(propertyName, valueProvider);
+                    // CONSIDER: Allow duplicate intercepting property value providers for same property name.
+                    Requires.Argument(!builder.ContainsKey(propertyName), nameof(valueProviders), "Duplicate property value providers for same property name");
+
+                    builder.Add(propertyName, valueProvider);
+                }
             }
 
             _valueProviders = builder.ToImmutable();
@@ -41,35 +44,40 @@ namespace Microsoft.VisualStudio.ProjectSystem.Properties
         public override async Task<string> GetEvaluatedPropertyValueAsync(string propertyName)
         {
             string evaluatedProperty = await base.GetEvaluatedPropertyValueAsync(propertyName);
-            if (_valueProviders.TryGetValue(propertyName, out Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata> valueProvider))
+            if (_valueProviders.TryGetValue(propertyName, out Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata>? valueProvider))
             {
-                evaluatedProperty = await valueProvider.Value.OnGetEvaluatedPropertyValueAsync(evaluatedProperty, DelegatedProperties);
+                evaluatedProperty = await valueProvider.Value.OnGetEvaluatedPropertyValueAsync(propertyName, evaluatedProperty, DelegatedProperties);
             }
 
             return evaluatedProperty;
         }
 
-        public override async Task<string> GetUnevaluatedPropertyValueAsync(string propertyName)
+        public override async Task<string?> GetUnevaluatedPropertyValueAsync(string propertyName)
         {
-            string unevaluatedProperty = await base.GetUnevaluatedPropertyValueAsync(propertyName);
-            if (_valueProviders.TryGetValue(propertyName, out Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata> valueProvider))
+            string? unevaluatedProperty = await base.GetUnevaluatedPropertyValueAsync(propertyName);
+            if (_valueProviders.TryGetValue(propertyName, out Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata>? valueProvider))
             {
-                unevaluatedProperty = await valueProvider.Value.OnGetUnevaluatedPropertyValueAsync(unevaluatedProperty, DelegatedProperties);
+                unevaluatedProperty = await valueProvider.Value.OnGetUnevaluatedPropertyValueAsync(propertyName, unevaluatedProperty ?? "", DelegatedProperties);
             }
 
             return unevaluatedProperty;
         }
 
-        public override async Task SetPropertyValueAsync(string propertyName, string unevaluatedPropertyValue, IReadOnlyDictionary<string, string> dimensionalConditions = null)
+        public override async Task SetPropertyValueAsync(string propertyName, string unevaluatedPropertyValue, IReadOnlyDictionary<string, string>? dimensionalConditions = null)
         {
-            if (_valueProviders.TryGetValue(propertyName, out Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata> valueProvider))
+            string? valueToSet;
+            if (_valueProviders.TryGetValue(propertyName, out Lazy<IInterceptingPropertyValueProvider, IInterceptingPropertyValueProviderMetadata>? valueProvider))
             {
-                unevaluatedPropertyValue = await valueProvider.Value.OnSetPropertyValueAsync(unevaluatedPropertyValue, DelegatedProperties, dimensionalConditions);
+                valueToSet = await valueProvider.Value.OnSetPropertyValueAsync(propertyName, unevaluatedPropertyValue, DelegatedProperties, dimensionalConditions);
+            }
+            else
+            {
+                valueToSet = unevaluatedPropertyValue;
             }
 
-            if (unevaluatedPropertyValue != null)
+            if (valueToSet != null)
             {
-                await base.SetPropertyValueAsync(propertyName, unevaluatedPropertyValue, dimensionalConditions);
+                await base.SetPropertyValueAsync(propertyName, valueToSet, dimensionalConditions);
             }
         }
 

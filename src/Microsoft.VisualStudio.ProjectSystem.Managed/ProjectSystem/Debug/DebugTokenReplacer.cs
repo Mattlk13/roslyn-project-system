@@ -29,7 +29,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.Debug
         private IProjectAccessor ProjectAccessor { get; }
 
         // Regular expression string to extract $(sometoken) elements from a string
-        private static readonly Regex s_matchTokenRegex = new Regex(@"(\$\((?<token>[^\)]+)\))", RegexOptions.IgnoreCase);
+        private static readonly Regex s_matchTokenRegex = new(@"(\$\((?<token>[^\)]+)\))", RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Walks the profile and returns a new one where all the tokens have been replaced. Tokens can consist of
@@ -39,22 +39,22 @@ namespace Microsoft.VisualStudio.ProjectSystem.Debug
         public async Task<ILaunchProfile> ReplaceTokensInProfileAsync(ILaunchProfile profile)
         {
             var resolvedProfile = new LaunchProfile(profile);
-            if (!string.IsNullOrWhiteSpace(resolvedProfile.ExecutablePath))
+            if (!Strings.IsNullOrWhiteSpace(resolvedProfile.ExecutablePath))
             {
                 resolvedProfile.ExecutablePath = await ReplaceTokensInStringAsync(resolvedProfile.ExecutablePath, true);
             }
 
-            if (!string.IsNullOrWhiteSpace(resolvedProfile.CommandLineArgs))
+            if (!Strings.IsNullOrWhiteSpace(resolvedProfile.CommandLineArgs))
             {
                 resolvedProfile.CommandLineArgs = await ReplaceTokensInStringAsync(resolvedProfile.CommandLineArgs, true);
             }
 
-            if (!string.IsNullOrWhiteSpace(resolvedProfile.WorkingDirectory))
+            if (!Strings.IsNullOrWhiteSpace(resolvedProfile.WorkingDirectory))
             {
                 resolvedProfile.WorkingDirectory = await ReplaceTokensInStringAsync(resolvedProfile.WorkingDirectory, true);
             }
 
-            if (!string.IsNullOrWhiteSpace(resolvedProfile.LaunchUrl))
+            if (!Strings.IsNullOrWhiteSpace(resolvedProfile.LaunchUrl))
             {
                 resolvedProfile.LaunchUrl = await ReplaceTokensInStringAsync(resolvedProfile.LaunchUrl, true);
             }
@@ -76,7 +76,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.Debug
                     {
                         resolvedProfile.OtherSettings = resolvedProfile.OtherSettings.SetItem(key, await ReplaceTokensInStringAsync(s, true));
                     }
-
                 }
             }
 

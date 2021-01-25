@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,8 +16,8 @@ using NuGet.SolutionRestoreManager;
 namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
 {
     /// <summary>
-    ///     Responsible for pushing ("nominating") project data such as referenced packages and 
-    ///     target frameworks to NuGet so that it can perform a package restore and returns the 
+    ///     Responsible for pushing ("nominating") project data such as referenced packages and
+    ///     target frameworks to NuGet so that it can perform a package restore and returns the
     ///     result.
     /// </summary>
     [Export(typeof(IPackageRestoreDataSource))]
@@ -56,12 +55,14 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
         // |            (Debug|AnyCPU|net45)         |    |       (Debug|AnyCPU|netcoreapp30)       |
         // |_________________________________________|    |_________________________________________|
         //
-        
+
         private readonly UnconfiguredProject _project;
         private readonly IPackageRestoreUnconfiguredInputDataSource _dataSource;
         private readonly IProjectAsynchronousTasksService _projectAsynchronousTasksService;
         private readonly IVsSolutionRestoreService3 _solutionRestoreService;
         private readonly IFileSystem _fileSystem;
+        private readonly Lazy<IProjectChangeHintSubmissionService> _projectChangeHintSubmissionService;
+        private readonly IProjectAccessor _projectAccessor;
         private readonly IProjectLogger _logger;
         private byte[]? _latestHash;
         private bool _enabled;
@@ -73,17 +74,21 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
             [Import(ExportContractNames.Scopes.UnconfiguredProject)]IProjectAsynchronousTasksService projectAsynchronousTasksService,
             IVsSolutionRestoreService3 solutionRestoreService,
             IFileSystem fileSystem,
+            Lazy<IProjectChangeHintSubmissionService> projectChangeHintSubmissionService,
+            IProjectAccessor projectAccessor,
             IProjectLogger logger)
-            : base(project.Services, synchronousDisposal : true, registerDataSource : false)
+            : base(project, synchronousDisposal : true, registerDataSource : false)
         {
             _project = project;
             _dataSource = dataSource;
             _projectAsynchronousTasksService = projectAsynchronousTasksService;
             _solutionRestoreService = solutionRestoreService;
             _fileSystem = fileSystem;
+            _projectChangeHintSubmissionService = projectChangeHintSubmissionService;
+            _projectAccessor = projectAccessor;
             _logger = logger;
         }
-        
+
         protected override IDisposable? LinkExternalInput(ITargetBlock<IProjectVersionedValue<RestoreData>> targetBlock)
         {
             JoinUpstreamDataSources(_dataSource);
@@ -104,7 +109,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
                 return Enumerable.Empty<IProjectVersionedValue<RestoreData>>();
 
             bool succeeded = await RestoreCoreAsync(e.Value.RestoreInfo);
-             
+
             RestoreData restoreData = CreateRestoreData(e.Value.RestoreInfo, succeeded);
 
             return new[]
@@ -134,7 +139,32 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
                                                                registerFaultHandler: true);
 
             // Prevent overlap until Restore completes
-            return await joinableTask;
+            bool success = await joinableTask;
+
+            await HintProjectDependentFileAsync(restoreInfo);
+
+            return success;
+        }
+
+        private Task HintProjectDependentFileAsync(ProjectRestoreInfo restoreInfo)
+        {
+            // Hint to CPS that the assets file "might" have changed and therefore
+            // reevaluate if it has. It already listens to file-changed events for it, 
+            // but can miss them during periods where the buffer is overflowed when 
+            // there are lots of changes.
+            if (restoreInfo.ProjectAssetsFilePath.Length > 0)
+            {
+                return _projectAccessor.EnterWriteLockAsync((collection, token) =>
+                {
+                    var hint = new ProjectChangeFileSystemEntityHint(ContainingProject!,
+                                                                     ProjectChangeFileSystemEntityHint.UpdateProjectDependentFile,
+                                                                     new[] { restoreInfo.ProjectAssetsFilePath });
+
+                    return _projectChangeHintSubmissionService.Value.HintAsync(hint);
+                });
+            }
+
+            return Task.CompletedTask;
         }
 
         private async Task<bool> NominateForRestoreAsync(ProjectRestoreInfo restoreInfo, CancellationToken cancellationToken)
@@ -155,33 +185,20 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.PackageRestore
 
         private RestoreData CreateRestoreData(ProjectRestoreInfo restoreInfo, bool succeeded)
         {
+            string projectAssetsFilePath = restoreInfo.ProjectAssetsFilePath;
+
             // Restore service gives us a guarantee that the assets file
             // will contain *at least* the changes that we pushed to it.
 
-            if (restoreInfo.ProjectAssetsFilePath.Length == 0)
+            if (projectAssetsFilePath.Length == 0)
                 return new RestoreData(string.Empty, DateTime.MinValue, succeeded: false);
 
+            DateTime lastWriteTime = _fileSystem.GetLastFileWriteTimeOrMinValueUtc(projectAssetsFilePath);
+
             return new RestoreData(
-                restoreInfo.ProjectAssetsFilePath,
-                GetLastWriteTimeUtc(restoreInfo.ProjectAssetsFilePath), succeeded: succeeded);
-        }
-
-        private DateTime GetLastWriteTimeUtc(string path)
-        {
-            Assumes.NotNullOrEmpty(path);
-
-            try
-            {
-                return _fileSystem.LastFileWriteTimeUtc(path);
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-
-            return DateTime.MinValue;
+                projectAssetsFilePath,
+                lastWriteTime,
+                succeeded: succeeded && lastWriteTime != DateTime.MinValue);
         }
 
         public Task LoadAsync()

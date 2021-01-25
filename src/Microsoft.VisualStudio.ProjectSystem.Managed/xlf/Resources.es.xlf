@@ -2,10 +2,25 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../Resources.resx">
     <body>
+      <trans-unit id="DataFlowFaults">
+        <source>Project system data flow '{0}' closed because of an exception: {1}.</source>
+        <target state="translated">Flujo de datos del sistema de proyectos "{0}" cerrado debido a una excepción: {1}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ImportsTreeNodeName">
         <source>Imports</source>
         <target state="translated">Importaciones</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NeutralLanguage_DisplayNameFormatString">
+        <source>{0} - {1}</source>
+        <target state="translated">{0} - {1}</target>
+        <note>{0} is a culture name such as "English (British)" or "Portugeuse (Brazil)", and {1} is the corresponding culture code such as "en-GB" or "pt-BR". </note>
+      </trans-unit>
+      <trans-unit id="NeutralLanguage_NoneValue">
+        <source>(None)</source>
+        <target state="translated">(Ninguno)</target>
+        <note>Special value to show in the project property pages when the NeutralLanguage property has no value.</note>
       </trans-unit>
       <trans-unit id="NoActionProfileName">
         <source>Start</source>
@@ -54,7 +69,7 @@
       </trans-unit>
       <trans-unit id="NoAuth">
         <source>No Authentication</source>
-        <target state="new">No Authentication</target>
+        <target state="translated">Sin autenticación</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputGroupPublishItemsDescription">
@@ -65,6 +80,15 @@
       <trans-unit id="OutputGroupPublishItemsDisplayName">
         <source>Publish Items</source>
         <target state="translated">Publicar elementos</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectLoadedWithWrongProjectType">
+        <source>The project file '{0}' cannot be opened. 
+
+This project was loaded using the wrong project type, likely as a result of renaming the project extension outside of Visual Studio. Remove and re-add the project to have the solution pick up the right project type.</source>
+        <target state="translated">No se puede abrir el archivo del proyecto "{0}". 
+
+Este proyecto se cargó con el tipo de proyecto incorrecto, probablemente como resultado de cambiar de nombre la extensión del proyecto fuera de Visual Studio. Quite el proyecto y agréguelo de nuevo para que la solución seleccione el tipo correcto.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectsNodeName">
@@ -98,7 +122,7 @@ Si este archivo o carpeta no aparece en el Explorador de soluciones, entonces no
       </trans-unit>
       <trans-unit id="WindowsAuth">
         <source>Windows Authentication</source>
-        <target state="new">Windows Authentication</target>
+        <target state="translated">Autenticación de Windows</target>
         <note />
       </trans-unit>
     </body>

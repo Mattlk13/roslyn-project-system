@@ -3,7 +3,7 @@
 namespace Microsoft.VisualStudio.ProjectSystem
 {
     /// <summary>
-    /// Contract names to use for CPS exports/imports. (Ported over from 
+    /// Contract names to use for CPS exports/imports. (Ported over from
     /// Microsoft.VisualStudio.ProjectSystem.ExportContractNames)
     /// </summary>
     internal static class ContractNames
@@ -44,6 +44,17 @@ namespace Microsoft.VisualStudio.ProjectSystem
             /// Contract name for the property provider that reads/writes special properties from the project file for assembly references.
             /// </summary>
             internal const string AssemblyReference = Prefix + "AssemblyReference";
+        }
+
+        /// <summary>
+        /// Contracts used by CPS exports of MSBuild objects.
+        /// </summary>
+        internal static class MSBuild
+        {
+            /// <summary>
+            /// The contract name on the IProjectGlobalPropertiesProvider export that publishes all the global properties on the GlobalProjectCollection.
+            /// </summary>
+            internal const string GlobalProjectCollectionGlobalProperties = Prefix + "GlobalProjectCollection.GlobalProperties";
         }
 
         /// <summary>

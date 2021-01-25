@@ -73,7 +73,7 @@ namespace Microsoft.VisualStudio.ProjectSystem
         {
             ActiveConfiguredObjects<ConfiguredProject>? projects = await GetActiveConfiguredProjectsAsync();
 
-            if (projects == null || projects.Objects.Count == 0)
+            if (projects?.Objects.IsEmpty != false)
             {
                 return null;
             }
@@ -107,7 +107,7 @@ namespace Microsoft.VisualStudio.ProjectSystem
                 return null;
             }
 
-            ImmutableArray<ConfiguredProject>.Builder builder = ImmutableArray.CreateBuilder<ConfiguredProject>(configurations.Objects.Count);
+            ImmutableArray<ConfiguredProject>.Builder builder = ImmutableArray.CreateBuilder<ConfiguredProject>(configurations.Objects.Length);
 
             foreach (ProjectConfiguration configuration in configurations.Objects)
             {
@@ -144,7 +144,13 @@ namespace Microsoft.VisualStudio.ProjectSystem
                 }
             }
 
-            Assumes.True(builder.Count > 0, "We have an active configuration that isn't one of the known configurations");
+            if (builder.Count == 0)
+            {   
+                // Active config is different to the known configs, 
+                // however we should still return it
+                builder.Add(activeSolutionConfiguration);
+            }
+
             return new ActiveConfiguredObjects<ProjectConfiguration>(builder.ToImmutableAndFree(), dimensionNames);
         }
 

@@ -37,6 +37,16 @@
         <target state="translated">最新状態チェック</target>
         <note />
       </trans-unit>
+      <trans-unit id="General_NestingIgnoreSolutionAndProjectProfiles">
+        <source>Ignore solution and project settings</source>
+        <target state="translated">ソリューションおよびプロジェクトの設定を無視する</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="General_NestingSettings_Title">
+        <source>File Nesting Settings</source>
+        <target state="translated">ファイルの入れ子設定</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

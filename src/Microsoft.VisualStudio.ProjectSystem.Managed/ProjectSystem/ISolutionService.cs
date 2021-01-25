@@ -1,19 +1,30 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements. The .NET Foundation licenses this file to you under the MIT license. See the LICENSE.md file in the project root for more information.
 
-using Microsoft.VisualStudio.Composition;
+using System;
+using System.Threading.Tasks;
 
 namespace Microsoft.VisualStudio.ProjectSystem
 {
     /// <summary>
-    /// A global service that tracks whether solution-level state.
+    ///     Provides a single property; <see cref="LoadedInHost"/>, which completes when the host
+    ///     recognizes that the solution is loaded.
     /// </summary>
-    [ProjectSystemContract(ProjectSystemContractScope.Global, ProjectSystemContractProvider.Private, Cardinality = ImportCardinality.OneOrZero)]
+    [ProjectSystemContract(ProjectSystemContractScope.Global, ProjectSystemContractProvider.Private)]
     internal interface ISolutionService
     {
         /// <summary>
-        /// Gets whether the solution is being closed, which can be useful to avoid doing
-        /// redundant work while tearing down the solution.
+        ///     Gets a task that completes when the host recognizes that the solution is loaded.
         /// </summary>
-        bool IsSolutionClosing { get; }
+        /// <remarks>
+        ///     Use <see cref="IUnconfiguredProjectTasksService.SolutionLoadedInHost"/> if
+        ///     within project context.
+        /// </remarks>
+        /// <exception cref="OperationCanceledException">
+        ///     Thrown when host is closed without a solution being loaded.
+        /// </exception>
+        Task LoadedInHost
+        {
+            get;
+        }
     }
 }

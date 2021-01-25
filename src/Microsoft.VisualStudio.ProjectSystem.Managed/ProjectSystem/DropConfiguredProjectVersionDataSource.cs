@@ -6,7 +6,7 @@ using System.Threading.Tasks.Dataflow;
 namespace Microsoft.VisualStudio.ProjectSystem
 {
     /// <summary>
-    ///     A <see cref="IProjectValueDataSource{T}"/> that drops <see cref="ProjectDataSources.ConfiguredProjectIdentity"/> and 
+    ///     A <see cref="IProjectValueDataSource{T}"/> that drops <see cref="ProjectDataSources.ConfiguredProjectIdentity"/> and
     ///     <see cref="ProjectDataSources.ConfiguredProjectVersion"/> versions from each value of the original
     ///     <see cref="IProjectValueDataSource{T}"/>.
     /// </summary>
@@ -15,8 +15,8 @@ namespace Microsoft.VisualStudio.ProjectSystem
     {
         private readonly IProjectValueDataSource<T> _dataSource;
 
-        public DropConfiguredProjectVersionDataSource(IProjectServices commonServices, IProjectValueDataSource<T> dataSource)
-            : base(commonServices, synchronousDisposal: true, registerDataSource: false)
+        public DropConfiguredProjectVersionDataSource(UnconfiguredProject project, IProjectValueDataSource<T> dataSource)
+            : base(project, synchronousDisposal: true, registerDataSource: false)
         {
             _dataSource = dataSource;
         }

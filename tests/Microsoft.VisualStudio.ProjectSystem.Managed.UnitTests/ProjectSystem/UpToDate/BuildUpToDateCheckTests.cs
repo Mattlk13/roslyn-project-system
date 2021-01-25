@@ -33,7 +33,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             .Add(new ItemType("Compile", true))
             .Add(new ItemType("Resource", true));
 
-        private readonly List<ITelemetryServiceFactory.TelemetryParameters> _telemetryEvents = new List<ITelemetryServiceFactory.TelemetryParameters>();
+        private readonly List<ITelemetryServiceFactory.TelemetryParameters> _telemetryEvents = new();
         private readonly BuildUpToDateCheck _buildUpToDateCheck;
         private readonly ITestOutputHelper _output;
         private readonly IFileSystemMock _fileSystem;
@@ -73,7 +73,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             var configuredProject = new Mock<ConfiguredProject>();
             configuredProject.SetupGet(c => c.ProjectVersion).Returns(() => _projectVersion);
             configuredProject.SetupGet(c => c.Services).Returns(configuredProjectServices);
-            configuredProject.SetupGet(c => c.UnconfiguredProject).Returns(UnconfiguredProjectFactory.Create(filePath: _projectFullPath));
+            configuredProject.SetupGet(c => c.UnconfiguredProject).Returns(UnconfiguredProjectFactory.Create(fullPath: _projectFullPath));
 
             var projectAsynchronousTasksService = new Mock<IProjectAsynchronousTasksService>();
             projectAsynchronousTasksService.SetupGet(s => s.UnloadCancellationToken).Returns(CancellationToken.None);
@@ -87,15 +87,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             _fileSystem.AddFolder(_msBuildProjectDirectory);
             _fileSystem.AddFolder(_outputPath);
 
-            var threadingService = IProjectThreadingServiceFactory.Create();
-
             _buildUpToDateCheck = new BuildUpToDateCheck(
                 projectSystemOptions.Object,
                 configuredProject.Object,
                 projectAsynchronousTasksService.Object,
                 IProjectItemSchemaServiceFactory.Create(),
                 ITelemetryServiceFactory.Create(telemetryParameters => _telemetryEvents.Add(telemetryParameters)),
-                threadingService,
                 _fileSystem);
         }
 
@@ -106,7 +103,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             Dictionary<string, IProjectRuleSnapshotModel>? sourceSnapshot = null,
             IEnumerable<(string FilePath, DateTime Time)>? dependentTimeFiles = null)
         {
-            await _buildUpToDateCheck.LoadAsync();
+            await _buildUpToDateCheck.ActivateAsync();
 
             BroadcastChange(
                 projectRuleSnapshot: projectSnapshot,
@@ -117,6 +114,11 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                         item => item.FilePath,
                         item => item.Time,
                         StringComparers.Paths));
+
+            // Flush the first false
+            await AssertNotUpToDateAsync(
+                "The up-to-date check has not yet run for this project. Not up-to-date.",
+                "FirstRun");
         }
 
         private void BroadcastChange(
@@ -152,7 +154,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                 identity: ProjectDataSources.ConfiguredProjectVersion,
                 version: _projectVersion);
 
-            _buildUpToDateCheck.OnChanged(value);
+            _buildUpToDateCheck.TestAccess.OnChanged(value);
 
             return;
 
@@ -307,7 +309,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             _buildUpToDateCheck.TestAccess.SetLastItemsChangedAtUtc(itemChangedTime);
 
             await AssertNotUpToDateAsync(
-                $"The set of project items was changed more recently ({itemChangedTime.ToLocalTime()}) than the earliest output 'C:\\Dev\\Solution\\Project\\BuiltOutputPath1' ({outputTime.ToLocalTime()}), not up to date.",
+                new[]
+                {
+                    $"The set of project items was changed more recently ({itemChangedTime.ToLocalTime()}) than the earliest output 'C:\\Dev\\Solution\\Project\\BuiltOutputPath1' ({outputTime.ToLocalTime()}), not up to date.",
+                    "    Content item added 'ItemPath1' (CopyType=CopyNever)",
+                    "    Content item added 'ItemPath2' (CopyType=CopyNever)",
+                },
                 "Outputs");
         }
 
@@ -499,7 +506,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                 [Compile.SchemaName] = SimpleItems("ItemPath1", "ItemPath2")
             };
 
-            await _buildUpToDateCheck.LoadAsync();
+            await _buildUpToDateCheck.ActivateAsync();
 
             Assert.Equal(DateTime.MinValue, _buildUpToDateCheck.TestAccess.State.LastItemsChangedAtUtc);
 
@@ -604,13 +611,16 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             var inputTime      = DateTime.UtcNow.AddMinutes(-2);
             var lastCheckTime  = DateTime.UtcNow.AddMinutes(-1);
 
-            _fileSystem.AddFile("C:\\Dev\\Solution\\Project\\BuiltOutputPath1", outputTime);
-            _fileSystem.AddFile("Analyzer1ResolvedPath", inputTime);
+            var outputItem = "C:\\Dev\\Solution\\Project\\BuiltOutputPath1";
+            var analyzerItem = "C:\\Dev\\Solution\\Project\\Analyzer1ResolvedPath";
+
+            _fileSystem.AddFile(outputItem, outputTime);
+            _fileSystem.AddFile(analyzerItem, inputTime);
             _buildUpToDateCheck.TestAccess.SetLastCheckedAtUtc(lastCheckTime);
             _buildUpToDateCheck.TestAccess.SetLastItemsChangedAtUtc(itemChangeTime);
 
             await AssertNotUpToDateAsync(
-                $"Input 'Analyzer1ResolvedPath' is newer ({inputTime.ToLocalTime()}) than earliest output 'C:\\Dev\\Solution\\Project\\BuiltOutputPath1' ({outputTime.ToLocalTime()}), not up to date.",
+                $"Input '{analyzerItem}' is newer ({inputTime.ToLocalTime()}) than earliest output '{outputItem}' ({outputTime.ToLocalTime()}), not up to date.",
                 "Outputs");
         }
 
@@ -907,7 +917,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                 [Content.SchemaName] = ItemWithMetadata("Item1", "CopyToOutputDirectory", "PreserveNewest")
             };
 
-            await _buildUpToDateCheck.LoadAsync();
+            await _buildUpToDateCheck.ActivateAsync();
 
             BroadcastChange(outDir: outDirSnapshot, sourceRuleSnapshot: sourceSnapshot);
 
@@ -1071,7 +1081,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
 
             var destinationPath = @"NewProjectDirectory\NewOutputPath\Item1";
             var sourcePath = @"C:\Dev\Solution\Project\Item1";
-            
+
 
             var itemChangeTime = DateTime.UtcNow.AddMinutes(-4);
             var lastCheckTime  = DateTime.UtcNow.AddMinutes(-3);
@@ -1093,20 +1103,92 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
         }
 
         [Fact]
-        public async Task IsUpToDateAsync_False_AdditionalDependentFileTimeSourceIsNewerThanOutput()
+        public async Task IsUpToDateAsync_True_InitialItemDataDoesNotUpdateLastAdditionalDependentFileTimesChangedAtUtc()
+        {
+            await _buildUpToDateCheck.ActivateAsync();
+
+            Assert.Equal(DateTime.MinValue, _buildUpToDateCheck.TestAccess.State.LastAdditionalDependentFileTimesChangedAtUtc);
+
+            var dependentTime = DateTime.UtcNow.AddMinutes(-1);
+            var dependentPath = @"C:\Dev\Solution\Project\Dependent";
+            _fileSystem.AddFile(dependentPath, dependentTime);
+            var dependentTimeFiles = ImmutableDictionary.Create<string, DateTime>(StringComparers.Paths).Add(dependentPath, dependentTime);
+
+            // Initial change does NOT set LastAdditionalDependentFileTimesChangedAtUtc
+            BroadcastChange(dependentTimeFiles: dependentTimeFiles);
+
+            Assert.Equal(DateTime.MinValue, _buildUpToDateCheck.TestAccess.State.LastAdditionalDependentFileTimesChangedAtUtc);
+
+            // Broadcasting an update with same Additional Dependent Files does NOT set LastAdditionalDependentFileTimesChangedAtUtc
+            BroadcastChange(dependentTimeFiles: dependentTimeFiles);
+
+            Assert.Equal(DateTime.MinValue, _buildUpToDateCheck.TestAccess.State.LastAdditionalDependentFileTimesChangedAtUtc);
+
+            // Broadcasting removing Additional Dependent Files DOES set LastAdditionalDependentFileTimesChangedAtUtc
+            BroadcastChange();
+
+            Assert.NotEqual(DateTime.MinValue, _buildUpToDateCheck.TestAccess.State.LastAdditionalDependentFileTimesChangedAtUtc);
+        }
+
+        [Fact(Skip = "TODO fix #6227")]
+        public async Task IsUpToDateAsync_False_AdditionalDependentFileTimeSourceRemoved()
         {
             var projectSnapshot = new Dictionary<string, IProjectRuleSnapshotModel>
             {
-                [UpToDateCheckBuilt.SchemaName] = SimpleItems("Output")
+                [UpToDateCheckBuilt.SchemaName] = SimpleItems("BuiltOutputPath1")
             };
 
-            var itemChangeTime = DateTime.UtcNow.AddMinutes(-4);
-            var lastCheckTime = DateTime.UtcNow.AddMinutes(-3);
+            var itemChangeTime = DateTime.UtcNow.AddMinutes(-6);
+            var dependentTime = DateTime.UtcNow.AddMinutes(-5);
+            var lastCheckTime = DateTime.UtcNow.AddMinutes(-4);
+            var lastAdditionalDependentFileTimesChanged = DateTime.UtcNow.AddMinutes(-3);
             var outputTime = DateTime.UtcNow.AddMinutes(-2);
-            var dependentTime = DateTime.UtcNow.AddMinutes(-1);
 
             var dependentPath = @"C:\Dev\Solution\Project\Dependent";
-            var outputPath = @"C:\Dev\Solution\Project\Output";
+            var outputPath = @"C:\Dev\Solution\Project\BuiltOutputPath1";
+
+            await SetupAsync(
+                projectSnapshot: projectSnapshot,
+                dependentTimeFiles: new[] { (dependentPath, dependentTime) });
+
+            _fileSystem.AddFile(dependentPath, dependentTime);
+            _fileSystem.AddFile(outputPath, outputTime);
+            _buildUpToDateCheck.TestAccess.SetLastCheckedAtUtc(lastCheckTime);
+            _buildUpToDateCheck.TestAccess.SetLastAdditionalDependentFileTimesChangedAtUtc(lastAdditionalDependentFileTimesChanged);
+
+            await AssertUpToDateAsync(
+                $"No inputs are newer than earliest output '{outputPath}' ({outputTime.ToLocalTime()}).");
+
+            // Remove dependentPath
+            await SetupAsync(projectSnapshot: projectSnapshot);
+
+            lastAdditionalDependentFileTimesChanged = DateTime.UtcNow.AddMinutes(-1);
+
+            _buildUpToDateCheck.TestAccess.SetLastItemsChangedAtUtc(itemChangeTime);
+            _buildUpToDateCheck.TestAccess.SetLastAdditionalDependentFileTimesChangedAtUtc(lastAdditionalDependentFileTimesChanged);
+
+            await AssertNotUpToDateAsync(
+                $"The set of AdditionalDependentFileTimes was changed more recently ({lastAdditionalDependentFileTimesChanged.ToLocalTime()}) " +
+                $"than the earliest output 'C:\\Dev\\Solution\\Project\\BuiltOutputPath1' ({outputTime.ToLocalTime()}), not up to date.",
+                "Outputs");
+        }
+
+        [Fact(Skip = "TODO fix #6227")]
+        public async Task IsUpToDateAsync_False_AdditionalDependentFileTimeSourceAdded()
+        {
+            var projectSnapshot = new Dictionary<string, IProjectRuleSnapshotModel>
+            {
+                [UpToDateCheckBuilt.SchemaName] = SimpleItems("BuiltOutputPath1")
+            };
+
+            var itemChangeTime = DateTime.UtcNow.AddMinutes(-5);
+            var lastCheckTime = DateTime.UtcNow.AddMinutes(-4);
+            var outputTime = DateTime.UtcNow.AddMinutes(-3);
+            var dependentTime = DateTime.UtcNow.AddMinutes(-2);
+            var lastAdditionalDependentFileTimesChanged = DateTime.UtcNow.AddMinutes(-1);
+
+            var dependentPath = @"C:\Dev\Solution\Project\Dependent";
+            var outputPath = @"C:\Dev\Solution\Project\BuiltOutputPath1";
 
             await SetupAsync(
                 projectSnapshot: projectSnapshot,
@@ -1116,6 +1198,41 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             _fileSystem.AddFile(outputPath, outputTime);
             _buildUpToDateCheck.TestAccess.SetLastCheckedAtUtc(lastCheckTime);
             _buildUpToDateCheck.TestAccess.SetLastItemsChangedAtUtc(itemChangeTime);
+            _buildUpToDateCheck.TestAccess.SetLastAdditionalDependentFileTimesChangedAtUtc(lastAdditionalDependentFileTimesChanged);
+
+            await AssertNotUpToDateAsync(
+                $"The set of AdditionalDependentFileTimes was changed more recently ({lastAdditionalDependentFileTimesChanged.ToLocalTime()}) " +
+                $"than the earliest output 'C:\\Dev\\Solution\\Project\\BuiltOutputPath1' ({outputTime.ToLocalTime()}), not up to date.",
+                "Outputs");
+        }
+
+        [Fact(Skip = "TODO fix #6227")]
+        public async Task IsUpToDateAsync_False_AdditionalDependentFileTimeSourceIsNewerThanOutput()
+        {
+            var projectSnapshot = new Dictionary<string, IProjectRuleSnapshotModel>
+            {
+                [UpToDateCheckBuilt.SchemaName] = SimpleItems("BuiltOutputPath1")
+            };
+
+            var lastAdditionalDependentFileTimesChanged = DateTime.UtcNow.AddMinutes(-4);
+            var itemChangeTime = DateTime.UtcNow.AddMinutes(-4);
+            var outputTime = DateTime.UtcNow.AddMinutes(-3);
+            var dependentTime = DateTime.UtcNow.AddMinutes(-2);
+            // NOTE This delay is neeed to bypass lastAdditionalDependentFileTimesChangedAtUtc
+            var lastCheckTime = DateTime.UtcNow.AddMinutes(-1);
+
+            var dependentPath = @"C:\Dev\Solution\Project\Dependent";
+            var outputPath = @"C:\Dev\Solution\Project\BuiltOutputPath1";
+
+            await SetupAsync(
+                projectSnapshot: projectSnapshot,
+                dependentTimeFiles: new[] { (dependentPath, dependentTime) });
+
+            _fileSystem.AddFile(dependentPath, dependentTime);
+            _fileSystem.AddFile(outputPath, outputTime);
+            _buildUpToDateCheck.TestAccess.SetLastCheckedAtUtc(lastCheckTime);
+            _buildUpToDateCheck.TestAccess.SetLastItemsChangedAtUtc(itemChangeTime);
+            _buildUpToDateCheck.TestAccess.SetLastAdditionalDependentFileTimesChangedAtUtc(lastAdditionalDependentFileTimesChanged);
 
             await AssertNotUpToDateAsync(
                 $"Input '{dependentPath}' is newer ({dependentTime.ToLocalTime()}) than earliest output '{outputPath}' ({outputTime.ToLocalTime()}), not up to date.",
@@ -1130,6 +1247,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                 [UpToDateCheckBuilt.SchemaName] = SimpleItems("Output")
             };
 
+            var lastAdditionalDependentFileTimesChanged = DateTime.UtcNow.AddMinutes(-5);
             var itemChangeTime = DateTime.UtcNow.AddMinutes(-4);
             var dependentTime = DateTime.UtcNow.AddMinutes(-3);
             var outputTime = DateTime.UtcNow.AddMinutes(-2);
@@ -1146,6 +1264,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             _fileSystem.AddFile(outputPath, outputTime);
             _buildUpToDateCheck.TestAccess.SetLastCheckedAtUtc(lastCheckTime);
             _buildUpToDateCheck.TestAccess.SetLastItemsChangedAtUtc(itemChangeTime);
+            _buildUpToDateCheck.TestAccess.SetLastAdditionalDependentFileTimesChangedAtUtc(lastAdditionalDependentFileTimesChanged);
 
             await AssertUpToDateAsync(
                 $"No inputs are newer than earliest output '{outputPath}' ({outputTime.ToLocalTime()}).");
@@ -1156,16 +1275,17 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
         {
             var projectSnapshot = new Dictionary<string, IProjectRuleSnapshotModel>
             {
-                [UpToDateCheckBuilt.SchemaName] = SimpleItems("Output")
+                [UpToDateCheckBuilt.SchemaName] = SimpleItems("BuiltOutputPath1")
             };
 
+            var lastAdditionalDependentFileTimesChanged = DateTime.UtcNow.AddMinutes(-5);
             var itemChangeTime = DateTime.UtcNow.AddMinutes(-4);
             var dependentTime = DateTime.UtcNow.AddMinutes(-3);
             var outputTime = DateTime.UtcNow.AddMinutes(-2);
             var lastCheckTime = DateTime.UtcNow.AddMinutes(-1);
 
             var dependentPath = @"C:\Dev\Solution\Project\Dependent";
-            var outputPath = @"C:\Dev\Solution\Project\Output";
+            var outputPath = @"C:\Dev\Solution\Project\BuiltOutputPath1";
 
             await SetupAsync(
                 projectSnapshot: projectSnapshot,
@@ -1175,6 +1295,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             _fileSystem.AddFile(outputPath, outputTime);
             _buildUpToDateCheck.TestAccess.SetLastCheckedAtUtc(lastCheckTime);
             _buildUpToDateCheck.TestAccess.SetLastItemsChangedAtUtc(itemChangeTime);
+            _buildUpToDateCheck.TestAccess.SetLastAdditionalDependentFileTimesChangedAtUtc(lastAdditionalDependentFileTimesChanged);
 
             await AssertUpToDateAsync(
                 $"No inputs are newer than earliest output '{outputPath}' ({outputTime.ToLocalTime()}).");
@@ -1213,12 +1334,9 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
         {
             var writer = new AssertWriter(_output);
 
-            if (logMessages != null)
+            foreach (var logMessage in logMessages)
             {
-                foreach (var logMessage in logMessages)
-                {
-                    writer.Add(logMessage);
-                }
+                writer.Add(logMessage);
             }
 
             writer.Add("Project is up to date.");
@@ -1230,20 +1348,42 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
 
         private void AssertTelemetryFailureEvent(string reason)
         {
-            Assert.Single(_telemetryEvents);
-            Assert.Equal(TelemetryEventName.UpToDateCheckFail, _telemetryEvents.Single().EventName);
-            Assert.Single(_telemetryEvents.Single().Properties);
-            Assert.Equal(TelemetryPropertyName.UpToDateCheckFailReason, _telemetryEvents.Single().Properties.Single().propertyName);
-            Assert.Equal(reason, _telemetryEvents.Single().Properties.Single().propertyValue);
+            var telemetryEvent = Assert.Single(_telemetryEvents);
+
+            Assert.Equal(TelemetryEventName.UpToDateCheckFail, telemetryEvent.EventName);
+            Assert.NotNull(telemetryEvent.Properties);
+            Assert.Equal(3, telemetryEvent.Properties!.Count);
+
+            var reasonProp = Assert.Single(telemetryEvent.Properties.Where(p => p.propertyName == TelemetryPropertyName.UpToDateCheckFailReason));
+            Assert.Equal(reason, reasonProp.propertyValue);
+
+            var durationProp = Assert.Single(telemetryEvent.Properties.Where(p => p.propertyName == TelemetryPropertyName.UpToDateCheckDurationMillis));
+            var duration = Assert.IsType<double>(durationProp.propertyValue);
+            Assert.True(duration > 0.0);
+
+            var fileCountProp = Assert.Single(telemetryEvent.Properties.Where(p => p.propertyName == TelemetryPropertyName.UpToDateCheckFileCount));
+            var fileCount = Assert.IsType<int>(fileCountProp.propertyValue);
+            Assert.True(fileCount >= 0);
 
             _telemetryEvents.Clear();
         }
 
         private void AssertTelemetrySuccessEvent()
         {
-            Assert.Single(_telemetryEvents);
-            Assert.Equal(TelemetryEventName.UpToDateCheckSuccess, _telemetryEvents.Single().EventName);
-            Assert.Null(_telemetryEvents.Single().Properties);
+            var telemetryEvent = Assert.Single(_telemetryEvents);
+
+            Assert.Equal(TelemetryEventName.UpToDateCheckSuccess, telemetryEvent.EventName);
+
+            Assert.NotNull(telemetryEvent.Properties);
+            Assert.Equal(2, telemetryEvent.Properties!.Count);
+
+            var durationProp = Assert.Single(telemetryEvent.Properties.Where(p => p.propertyName == TelemetryPropertyName.UpToDateCheckDurationMillis));
+            var duration = Assert.IsType<double>(durationProp.propertyValue);
+            Assert.True(duration > 0.0);
+
+            var fileCountProp = Assert.Single(telemetryEvent.Properties.Where(p => p.propertyName == TelemetryPropertyName.UpToDateCheckFileCount));
+            var fileCount = Assert.IsType<int>(fileCountProp.propertyValue);
+            Assert.True(fileCount >= 0);
 
             _telemetryEvents.Clear();
         }

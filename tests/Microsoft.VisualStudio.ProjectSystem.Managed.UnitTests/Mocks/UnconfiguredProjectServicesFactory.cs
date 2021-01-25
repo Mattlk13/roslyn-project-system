@@ -6,16 +6,26 @@ namespace Microsoft.VisualStudio.ProjectSystem
 {
     internal static class UnconfiguredProjectServicesFactory
     {
-        public static UnconfiguredProjectServices Create(IProjectThreadingService threadingService)
+        public static UnconfiguredProjectServices Create(IProjectThreadingService? threadingService = null, IProjectFaultHandlerService? projectFaultHandlerService = null,
+            IProjectService? projectService = null)
         {
+            projectFaultHandlerService ??= IProjectFaultHandlerServiceFactory.Create();
+            threadingService ??= IProjectThreadingServiceFactory.Create();
+
             var projectLockService = IProjectLockServiceFactory.Create();
 
             var mock = new Mock<UnconfiguredProjectServices>();
+
+            projectService ??= IProjectServiceFactory.Create(ProjectServicesFactory.Create(threadingService, projectLockService: projectLockService));
+
             mock.SetupGet(p => p.ProjectService)
-                .Returns(IProjectServiceFactory.Create(ProjectServicesFactory.Create(threadingService, projectLockService: projectLockService)));
+                .Returns(projectService);
 
             mock.Setup(p => p.ProjectLockService)
                 .Returns(projectLockService);
+
+            mock.Setup(p => p.FaultHandler)
+                .Returns(projectFaultHandlerService);
 
             return mock.Object;
         }

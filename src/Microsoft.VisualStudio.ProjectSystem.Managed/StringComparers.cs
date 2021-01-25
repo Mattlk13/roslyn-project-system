@@ -3,8 +3,6 @@
 using System;
 using System.Collections.Generic;
 
-#pragma warning disable RS0030 // Do not used banned APIs (this is the replacement)
-
 namespace Microsoft.VisualStudio
 {
     /// <summary>
@@ -21,6 +19,7 @@ namespace Microsoft.VisualStudio
         public static StringComparer PropertyLiteralValues => StringComparer.OrdinalIgnoreCase;
         public static StringComparer PropertyValues => StringComparer.Ordinal;
         public static StringComparer RuleNames => StringComparer.OrdinalIgnoreCase;
+        public static StringComparer CategoryNames => StringComparer.OrdinalIgnoreCase;
         public static StringComparer ConfigurationDimensionNames => StringComparer.Ordinal;
         public static StringComparer DependencyProviderTypes => StringComparer.OrdinalIgnoreCase;
         public static StringComparer DependencyTreeIds => StringComparer.OrdinalIgnoreCase;
@@ -28,6 +27,7 @@ namespace Microsoft.VisualStudio
         public static StringComparer ItemTypes => StringComparer.OrdinalIgnoreCase;
         public static StringComparer TargetNames => StringComparer.OrdinalIgnoreCase;
         public static StringComparer FrameworkIdentifiers => StringComparer.OrdinalIgnoreCase;
+        public static StringComparer LibraryNames => StringComparer.Ordinal;
         public static StringComparer EnvironmentVariables => StringComparer.OrdinalIgnoreCase;
         public static StringComparer TelemetryEventNames => StringComparer.Ordinal;
         public static StringComparer NamedExports => StringComparer.OrdinalIgnoreCase;
@@ -63,6 +63,7 @@ namespace Microsoft.VisualStudio
         public static StringComparison ItemTypes => StringComparison.OrdinalIgnoreCase;
         public static StringComparison TargetNames => StringComparison.OrdinalIgnoreCase;
         public static StringComparison FrameworkIdentifiers => StringComparison.OrdinalIgnoreCase;
+        public static StringComparison LibraryNames => StringComparison.Ordinal;
         public static StringComparison EnvironmentVariables => StringComparison.OrdinalIgnoreCase;
         public static StringComparison TelemetryEventNames => StringComparison.Ordinal;
         public static StringComparison NamedExports => StringComparison.OrdinalIgnoreCase;

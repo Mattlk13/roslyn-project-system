@@ -21,7 +21,7 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
 
         Protected DocumentationFile() As String
         'True when we're changing control values ourselves
-        Protected InsideInternalUpdate As Boolean = False
+        Protected InsideInternalUpdate As Boolean
 
         ' Stored conditional compilation symbols. We need these to calculate the new strings
         '   to return for the conditional compilation constants when the user changes any
@@ -53,7 +53,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 New ComboItem("warnings", My.Resources.Microsoft_VisualStudio_Editors_Designer.PPG_BuildSettings_Nullable_Warnings),
                 New ComboItem("annotations", My.Resources.Microsoft_VisualStudio_Editors_Designer.PPG_BuildSettings_Nullable_Annotations)})
         End Sub
-
 
         Public Enum TreatWarningsSetting
             WARNINGS_ALL
@@ -279,8 +278,8 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 propRegisterForCOM = GetPropertyDescriptor("RegisterForComInterop")
                 obj = TryGetNonCommonPropertyValue(propRegisterForCOM)
 
-                If Not obj Is PropertyControlData.MissingProperty Then
-                    If Not obj Is PropertyControlData.Indeterminate Then
+                If obj IsNot PropertyControlData.MissingProperty Then
+                    If obj IsNot PropertyControlData.Indeterminate Then
                         bRegisterForCOM = CType(obj, String) IsNot "" AndAlso CType(obj, Boolean)
                     End If
 
@@ -510,7 +509,24 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
 
         Private Function WarningLevelSet(control As Control, prop As PropertyDescriptor, value As Object) As Boolean
             If Not PropertyControlData.IsSpecialValue(value) Then
-                cboWarningLevel.SelectedIndex = CType(value, Integer)
+                Dim warningLevel = CType(value, Integer)
+                Dim indexAsString = warningLevel.ToString()
+                ' Lookup the index of the given warning level in the combobox
+                Dim indexLocation = If(warningLevel = 9999, GetIndexLocation(My.Resources.Strings.preview), GetIndexLocation(indexAsString))
+
+                If indexLocation <> -1 Then
+                    ' If there is an existing entry use that
+                    cboWarningLevel.SelectedIndex = indexLocation
+                ElseIf warningLevel = 9999 Then
+                    ' Otherwise add a new entry
+                    ' 9999 is a special value meaning use the preview warning level
+                    cboWarningLevel.Items.Add(My.Resources.Strings.preview)
+                    cboWarningLevel.SelectedIndex = cboWarningLevel.Items.Count - 1
+                Else
+                    ' any non - negative number can be specified but we only want to show them in the combo box if the value is set
+                    cboWarningLevel.Items.Add(indexAsString)
+                    cboWarningLevel.SelectedIndex = cboWarningLevel.Items.Count - 1
+                End If
                 Return True
             Else
                 ' Indeterminate. Let the architecture handle
@@ -519,8 +535,19 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             End If
         End Function
 
+        Private Function GetIndexLocation(indexToSearchFor As String) As Integer
+            Return cboWarningLevel.Items.Cast(Of String).ToList().FindIndex(Function(s)
+                                                                                Return s = indexToSearchFor
+                                                                            End Function)
+        End Function
+
         Private Function WarningLevelGet(control As Control, prop As PropertyDescriptor, ByRef value As Object) As Boolean
-            value = CType(cboWarningLevel.SelectedIndex, Integer)
+            Dim selectedItem = cboWarningLevel.Items.Cast(Of String).ToList()(cboWarningLevel.SelectedIndex)
+            If selectedItem = My.Resources.Strings.preview Then
+                value = 9999
+            Else
+                value = CType(selectedItem, Integer)
+            End If
             Return True
         End Function
 
@@ -698,7 +725,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             End If
         End Sub
 
-
         ''' <summary>
         ''' Fired when the conditional compilations constants textbox has changed.  We are manually handling
         '''   events associated with this control, so we need to recalculate related values
@@ -747,9 +773,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         '  the virtual "DEBUG" and "TRACE" properties that we've created, so the undo/redo descriptions for changes to these
         '  properties will always just say "DefineConstants"
 
-
-
-
         ''' <summary>
         ''' Fired when the conditional compilations constants textbox has changed.  We are manually handling
         '''   events associated with this control, so we need to recalculate related values
@@ -784,7 +807,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 '  to TextChanged and will mark it dirty, and will make sure it's persisted on LostFocus.
             End If
         End Sub
-
 
         ''' <summary>
         ''' Fired when the "Define DEBUG Constant" check has changed.  We are manually handling
@@ -821,7 +843,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             End If
         End Sub
 
-
         ''' <summary>
         ''' Fired when the "Define DEBUG Constant" check has changed.  We are manually handling
         '''   events associated with this control, so we need to recalculate related values.
@@ -844,7 +865,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 SetDirty(VsProjPropId.VBPROJPROPID_DefineConstants, True)
             End If
         End Sub
-
 
         ''' <summary>
         ''' Given DefineConstants string, parse it into a DEBUG value, a TRACE value, and everything else
@@ -873,7 +893,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 TraceDefined = False
             End If
         End Sub
-
 
         ''' <summary>
         ''' Multi-value setter for the conditional compilation constants value.  We parse the values and determine
@@ -958,7 +977,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             Return True
         End Function
 
-
         ''' <summary>
         ''' Multi-value getter for the conditional compilation constants values.
         ''' </summary>
@@ -969,7 +987,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             CondCompSymbols.CopyTo(values, 0)
             Return True
         End Function
-
 
         ''' <summary>
         ''' Searches in the RawPropertiesObjects for a configuration object whose name matches the name passed in,
@@ -1009,7 +1026,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             Return -1
         End Function
 
-
         ''' <summary>
         ''' Returns whether or not we're in simplified config mode for this project, which means that
         '''   we hide the configuration/platform comboboxes.
@@ -1017,7 +1033,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         Public Function IsSimplifiedConfigs() As Boolean
             Return ShellUtil.GetIsSimplifiedConfigMode(ProjectHierarchy)
         End Function
-
 
         ''' <summary>
         ''' Given a string containing conditional compilation constants, adds the given constant to it, if it
@@ -1046,7 +1061,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             If Not bFound Then
                 ' Add it to the beginning
                 Dim stNewConstants As String = stSymbol
-
 
                 If stOldCondCompConstants <> "" Then
                     stNewConstants += ";"
@@ -1081,7 +1095,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             End If
             Return False
         End Function
-
 
         ''' <summary>
         ''' Given a string containing conditional compilation constants, removes the given constant from it, if it

@@ -15,9 +15,9 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
         /// <summary>
         /// The list of assemblies that may contain <see cref="ProjectSystemContractProvider.System"/> exports.
         /// </summary>
-        private static readonly IReadOnlyList<Assembly> BuildInAssemblies = new Assembly[]
+        internal static readonly IReadOnlyList<Assembly> BuiltInAssemblies = new Assembly[]
         {
-            typeof(IConfiguredProjectImplicitActivationTracking).Assembly,  // Microsoft.VisualStudio.ProjectSystem.Managed
+            typeof(ConfiguredProjectImplicitActivationTracking).Assembly,   // Microsoft.VisualStudio.ProjectSystem.Managed
             typeof(VsContainedLanguageComponentsFactory).Assembly,          // Microsoft.VisualStudio.ProjectSystem.Managed.VS
         };
 
@@ -28,18 +28,18 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
         {
             typeof(IProjectService).Assembly,                               // Microsoft.VisualStudio.ProjectSystem
             typeof(IVsProjectServices).Assembly,                            // Microsoft.VisualStudio.ProjectSystem.VS
-            typeof(IConfiguredProjectImplicitActivationTracking).Assembly,  // Microsoft.VisualStudio.ProjectSystem.Managed
+            typeof(ConfiguredProjectImplicitActivationTracking).Assembly,   // Microsoft.VisualStudio.ProjectSystem.Managed
             typeof(VsContainedLanguageComponentsFactory).Assembly,          // Microsoft.VisualStudio.ProjectSystem.Managed.VS
         };
 
-        public static readonly ComponentComposition Instance = new ComponentComposition();
+        public static readonly ComponentComposition Instance = new();
 
         public ComponentComposition()
         {
             var discovery = PartDiscovery.Combine(new AttributedPartDiscoveryV1(Resolver.DefaultInstance),
                                                   new AttributedPartDiscovery(Resolver.DefaultInstance, isNonPublicSupported: true));
 
-            var parts = discovery.CreatePartsAsync(BuildInAssemblies).GetAwaiter().GetResult();
+            var parts = discovery.CreatePartsAsync(BuiltInAssemblies).GetAwaiter().GetResult();
             var scopeParts = discovery.CreatePartsAsync(typeof(UnconfiguredProjectScope), typeof(ConfiguredProjectScope), typeof(ProjectServiceScope), typeof(GlobalScope)).GetAwaiter().GetResult();
 
             ComposableCatalog catalog = ComposableCatalog.Create(Resolver.DefaultInstance)
@@ -50,7 +50,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
             // Prepare the self-host service and composition
             Catalog = catalog;
             Configuration = CompositionConfiguration.Create(catalog);
-            Contracts = CollectContractMetadata(ContractAssemblies.Union(BuildInAssemblies));
+            Contracts = CollectContractMetadata(ContractAssemblies.Union(BuiltInAssemblies));
             ContractsRequiringAppliesTo = CollectContractsRequiringAppliesTo(catalog);
             InterfaceNames = CollectInterfaceNames(ContractAssemblies);
         }

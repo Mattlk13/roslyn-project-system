@@ -5,7 +5,6 @@ Imports Microsoft.VisualStudio.Shell
 Imports LOGVIEWID = Microsoft.VisualStudio.Editors.Interop.LOGVIEWID
 Imports NativeMethods = Microsoft.VisualStudio.Editors.Interop.NativeMethods
 
-
 Namespace Microsoft.VisualStudio.Editors.SettingsDesigner
 
     ''' <summary>
@@ -13,7 +12,7 @@ Namespace Microsoft.VisualStudio.Editors.SettingsDesigner
     ''' </summary>
     <Guid(SettingsDesignerEditorFactory.EditorGuidString),
     ProvideView(LogicalView.Designer, "Design"),
-    ProvideEditorExtension(GetType(SettingsDesignerEditorFactory), ".settings", 30)>
+    ProvideEditorExtension(GetType(SettingsDesignerEditorFactory), ".settings", &H30)>
     Friend NotInheritable Class SettingsDesignerEditorFactory
         Inherits DesignerFramework.BaseEditorFactory
 

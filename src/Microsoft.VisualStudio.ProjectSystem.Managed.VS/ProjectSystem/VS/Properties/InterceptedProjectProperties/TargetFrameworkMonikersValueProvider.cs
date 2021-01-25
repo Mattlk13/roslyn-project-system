@@ -18,7 +18,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties.InterceptedProjectP
             _projectProvider = projectProvider;
         }
 
-        public override async Task<string> OnGetEvaluatedPropertyValueAsync(string evaluatedPropertyValue, IProjectProperties defaultProperties)
+        public override async Task<string> OnGetEvaluatedPropertyValueAsync(string propertyName, string evaluatedPropertyValue, IProjectProperties defaultProperties)
         {
             ActiveConfiguredObjects<ConfiguredProject>? configuredProjects = await _projectProvider.GetActiveConfiguredProjectsAsync();
 
@@ -27,7 +27,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties.InterceptedProjectP
                 return "";
             }
 
-            var builder = PooledArray<string>.GetInstance(capacity: configuredProjects.Objects.Count);
+            var builder = PooledArray<string>.GetInstance(capacity: configuredProjects.Objects.Length);
 
             foreach (ConfiguredProject configuredProject in configuredProjects.Objects)
             {

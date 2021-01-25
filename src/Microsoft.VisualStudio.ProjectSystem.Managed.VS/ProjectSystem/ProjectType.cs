@@ -9,8 +9,8 @@ namespace Microsoft.VisualStudio
     ///     Represents the managed project types in Visual Studio.
     /// </summary>
     /// <remarks>
-    ///     A project type points to a factory that implements <see cref="IVsProjectFactory"/> and is responsible for creating an in-memory 
-    ///     representation (implementing <see cref="IVsHierarchy"/>, <see cref="IVsProject"/>) that features through out Visual Studio 
+    ///     A project type points to a factory that implements <see cref="IVsProjectFactory"/> and is responsible for creating an in-memory
+    ///     representation (implementing <see cref="IVsHierarchy"/>, <see cref="IVsProject"/>) that features through out Visual Studio
     ///     interact with.
     /// </remarks>
     internal static class ProjectType
@@ -28,7 +28,7 @@ namespace Microsoft.VisualStudio
         /// <summary>
         ///     A <see cref="Guid"/> representing the legacy Visual Basic project type based on the native project system in msvbprj.dll.
         /// </summary>
-        public static readonly Guid LegacyVisualBasicGuid = new Guid(LegacyVisualBasic);
+        public static readonly Guid LegacyVisualBasicGuid = new(LegacyVisualBasic);
 
         /// <summary>
         ///     A <see cref="string"/> representing the C# project type based on the Common Project System (CPS).
@@ -38,7 +38,7 @@ namespace Microsoft.VisualStudio
         /// <summary>
         ///     A <see cref="Guid"/> representing the C# project type based on the Common Project System (CPS).
         /// </summary>
-        public static readonly Guid CSharpGuid = new Guid(CSharp);
+        public static readonly Guid CSharpGuid = new(CSharp);
 
         /// <summary>
         ///     A <see cref="string"/> representing the legacy C# project type based on the native project system in csproj.dll.
@@ -48,7 +48,7 @@ namespace Microsoft.VisualStudio
         /// <summary>
         ///     A <see cref="Guid"/> representing the legacy C# project type based on the native project system in csproj.dll.
         /// </summary>
-        public static readonly Guid LegacyCSharpGuid = new Guid(LegacyCSharp);
+        public static readonly Guid LegacyCSharpGuid = new(LegacyCSharp);
 
         /// <summary>
         ///     A <see cref="string"/> representing the F# project type based on the Common Project System (CPS).
@@ -58,7 +58,7 @@ namespace Microsoft.VisualStudio
         /// <summary>
         ///     A <see cref="Guid"/> representing the F# project type based on the Common Project System (CPS).
         /// </summary>
-        public static readonly Guid FSharpGuid = new Guid(FSharp);
+        public static readonly Guid FSharpGuid = new(FSharp);
 
         /// <summary>
         ///     A <see cref="string"/> representing the legacy F# project type based on the Managed Package Framework (MPF).
@@ -68,7 +68,7 @@ namespace Microsoft.VisualStudio
         /// <summary>
         ///     A <see cref="Guid"/> representing the legacy F# project type based on the Managed Package Framework (MPF).
         /// </summary>
-        public static readonly Guid LegacyFSharpGuid = new Guid(LegacyFSharp);
+        public static readonly Guid LegacyFSharpGuid = new(LegacyFSharp);
 
         /// <summary>
         ///     A <see cref="string"/> representing the deprecated C# (xproj) project type based on the Common Project System (CPS).

@@ -12,12 +12,15 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
     ///     The type of the service to retrieve and return from <see cref="Value"/>.
     /// </typeparam>
     [ProjectSystemContract(ProjectSystemContractScope.Global, ProjectSystemContractProvider.Private, Cardinality = ImportCardinality.ExactlyOne)]
-    internal interface IVsUIService<T> 
+    internal interface IVsUIService<T>
         where T : class?
     {
         /// <summary>
         ///     Gets the service object associated with <typeparamref name="T"/>.
         /// </summary>
+        /// <remarks>
+        ///     Must be called from the UI thread.
+        /// </remarks>
         /// <exception cref="COMException">
         ///     This property was not accessed from the UI thread.
         /// </exception>

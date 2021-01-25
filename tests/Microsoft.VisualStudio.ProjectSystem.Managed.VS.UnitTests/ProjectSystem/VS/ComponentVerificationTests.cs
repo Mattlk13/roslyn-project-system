@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.Composition;
 using System.Linq;
 using System.Reflection;
 using Microsoft.VisualStudio.Composition;
@@ -77,7 +78,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
         public void ExportsFromSamePartMustApplyToSameCapabilities(Type type)
         {
             // Exports coming from a single part must apply to the same capabilities
-
             var definition = ComponentComposition.Instance.FindComposablePartDefinition(type);
 
             Assert.NotNull(definition);
@@ -86,6 +86,9 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
             var appliesToMetadata = new List<string>();
             foreach (KeyValuePair<MemberRef, ExportDefinition> exportDefinitionPair in definition!.ExportDefinitions)
             {
+                if (exportDefinitionPair.Key?.IsStatic == true)
+                    continue;
+
                 ExportDefinition exportDefinition = exportDefinitionPair.Value;
                 exportDefinition.Metadata.TryGetValue(nameof(AppliesToAttribute.AppliesTo), out object metadata);
                 appliesToMetadata.Add((string)metadata);
@@ -113,7 +116,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
             Assert.NotNull(definition);
 
             // BUG: https://github.com/dotnet/project-system/issues/5519
-            if (definition!.Type.FullName == "Microsoft.VisualStudio.ProjectSystem.VS.Tree.Dependencies.Subscriptions.DependenciesSnapshotProvider")
+            if (definition!.Type.FullName == "Microsoft.VisualStudio.ProjectSystem.Tree.Dependencies.Subscriptions.DependenciesSnapshotProvider")
                 return;
 
             foreach (KeyValuePair<MemberRef, ExportDefinition> exportDefinitionPair in definition!.ExportDefinitions)
@@ -152,6 +155,27 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
             {
                 return appliesTo.Split(new char[] { '&', '|', '(', ')', ' ', '!', }, StringSplitOptions.RemoveEmptyEntries);
             }
+        }
+
+        [Theory]
+        [ClassData(typeof(AllExportsTestData))]
+        public void ExportsMustBeConstructable(Type type)
+        {
+            bool hasParameterlessConstructor = false;
+            int importingConstructors = 0;
+            foreach (var constructor in type.GetConstructors(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (constructor.GetParameters().Length == 0)
+                {
+                    hasParameterlessConstructor = true;
+                }
+                else if (constructor.GetCustomAttribute<ImportingConstructorAttribute>() != null)
+                {
+                    importingConstructors++;
+                }
+            }
+            Assert.True(importingConstructors <= 1, "MEF exports cannot have more than one constructor marked [ImportingConstructor]");
+            Assert.True(hasParameterlessConstructor || importingConstructors == 1, "MEF exports must have a parameterless constructor and/or a single constructor marked with [ImportingConstructor]");
         }
 
         [Theory]
@@ -324,7 +348,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS
         /// </summary>
         private static bool ContainsExpression(string? capability)
         {
-            return capability != null && capability.IndexOfAny(new char[] { '&', '|', '!' }) >= 0;
+            return capability?.IndexOfAny(new char[] { '&', '|', '!' }) >= 0;
         }
 
         /// <summary>

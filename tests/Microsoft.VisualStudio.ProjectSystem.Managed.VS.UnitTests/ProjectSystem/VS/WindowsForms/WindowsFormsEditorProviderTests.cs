@@ -2,6 +2,9 @@
 
 using System;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.ProjectSystem.Properties;
+using Moq;
+using Moq.Protected;
 using Xunit;
 
 namespace Microsoft.VisualStudio.ProjectSystem.VS.WindowsForms
@@ -61,7 +64,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.WindowsForms
 
             Assert.Null(result);
         }
-
 
         [Fact]
         public async Task GetSpecificEditorAsync_WhenNoDefaultProjectSpecificEditorProviders_ReturnsNull()
@@ -179,7 +181,6 @@ Project
         [Fact]
         public async Task GetSpecificEditorAsync_WhenParentIsSourceFile_ReturnsNull()
         {   // Let's folks double-click the designer file to open it as text
-
             var provider = CreateInstanceWithDefaultEditorProvider(@"
 Project
     Foo.cs (flags: {SourceFile})
@@ -193,7 +194,7 @@ Project
 
         [Fact]
         public async Task SetUseGlobalEditorAsync_WhenParentIsSourceFile_ReturnsFalse()
-        {   
+        {
             var provider = CreateInstanceWithDefaultEditorProvider(@"
 Project
     Foo.cs (flags: {SourceFile})
@@ -283,11 +284,16 @@ Project
 
         private static WindowsFormsEditorProvider CreateInstance(UnconfiguredProject? unconfiguredProject = null, IPhysicalProjectTree? projectTree = null, IProjectSystemOptions? options = null)
         {
-            unconfiguredProject ??= UnconfiguredProjectFactory.Create();
+            var project = ConfiguredProjectFactory.Create();
+            unconfiguredProject ??= UnconfiguredProjectFactory.Create(configuredProject: project);
             projectTree ??= IPhysicalProjectTreeFactory.Create();
             options ??= IProjectSystemOptionsFactory.Create();
 
-            return new WindowsFormsEditorProvider(unconfiguredProject, projectTree.AsLazy(), options.AsLazy());
+            var provider = new Mock<WindowsFormsEditorProvider>(unconfiguredProject, projectTree.AsLazy(), options.AsLazy());
+            provider.Protected().Setup<IRule?>("GetBrowseObjectProperties", ItExpr.IsAny<ConfiguredProject>(), ItExpr.IsAny<IProjectItemTree>())
+                    .Returns((ConfiguredProject configuredProject, IProjectItemTree node) => node.BrowseObjectProperties);
+
+            return provider.Object;
         }
     }
 }

@@ -10,7 +10,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
 {
     public class TreeItemOrderPropertyProviderTests
     {
-        private readonly List<(string type, string include)> _simpleOrderFile = new List<(string type, string include)>
+        private readonly List<(string type, string include)> _simpleOrderFile = new()
         {
             ("Compile", "Order.fs"),
             ("Compile", "Customer.fs"),
@@ -30,7 +30,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
                 .Select(p => new ProjectItemIdentity(p.type, p.include))
                 .ToList();
 
-            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(filePath: "X:\\Project\\"));
+            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(fullPath: "X:\\Project\\"));
 
             var metadata = rootedPath == null ? null : new Dictionary<string, string> { { "FullPath", rootedPath } }.ToImmutableDictionary();
 
@@ -42,7 +42,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
             Assert.Equal(expectedOrder, values.DisplayOrder);
         }
 
-        private readonly List<(string type, string include)> _simpleOrderFileDuplicate = new List<(string type, string include)>
+        private readonly List<(string type, string include)> _simpleOrderFileDuplicate = new()
         {
             ("Compile", "Order.fs"),
             ("Compile", "Customer.fs"),
@@ -63,7 +63,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
                 .Select(p => new ProjectItemIdentity(p.type, p.include))
                 .ToList();
 
-            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(filePath: "X:\\Project\\"));
+            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(fullPath: "X:\\Project\\"));
 
             var metadata = rootedPath == null ? null : new Dictionary<string, string> { { "FullPath", rootedPath } }.ToImmutableDictionary();
 
@@ -85,7 +85,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
                 .Select(p => new ProjectItemIdentity(p.type, p.include))
                 .ToList();
 
-            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(filePath: "X:\\Project\\"));
+            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(fullPath: "X:\\Project\\"));
 
             var lastOrder = 0;
             solutionTree.ForEach(item =>
@@ -183,7 +183,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
             }
         }
 
-        private readonly List<(string type, string include)> _orderedWithDups = new List<(string type, string include)>
+        private readonly List<(string type, string include)> _orderedWithDups = new()
         {
             ("Compile", "Common.fs"),
             ("Compile", "Tables\\Order.fs"),
@@ -203,7 +203,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
                 .Select(p => new ProjectItemIdentity(p.type, p.include))
                 .ToList();
 
-            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(filePath: "X:\\Project\\"));
+            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(fullPath: "X:\\Project\\"));
 
             bool isUnderProjectRoot = rootedPath?.Contains("Tables") != true;
             var metadata = rootedPath == null ? null : new Dictionary<string, string> { { "FullPath", rootedPath } }.ToImmutableDictionary();
@@ -218,7 +218,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
             Assert.Equal(expectedOrder, values.DisplayOrder);
         }
 
-        private readonly List<(string type, string include, string? linkPath)> _orderedWithLinkPaths = new List<(string type, string include, string? linkPath)>
+        private readonly List<(string type, string include, string? linkPath)> _orderedWithLinkPaths = new()
         {
             ("Compile", "Common.fs",         "Tables/Test.fs"),
             ("Compile", "Tables\\Order.fs",  null),
@@ -238,7 +238,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
                 .Select(p => new ProjectItemIdentity(p.type, p.include, p.linkPath))
                 .ToList();
 
-            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(filePath: "X:\\Project\\"));
+            var provider = new TreeItemOrderPropertyProvider(orderedItems, UnconfiguredProjectFactory.Create(fullPath: "X:\\Project\\"));
 
             bool isUnderProjectRoot = rootedPath?.Contains("Tables") != true;
             var metadata = rootedPath == null ? null : new Dictionary<string, string> { { "FullPath", rootedPath }, { "Link", linkPath ?? "" } }.ToImmutableDictionary();
@@ -267,6 +267,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Tree.Order
                 metadata: metadata);
 
         private static ReferencesProjectTreeCustomizablePropertyValues GetInitialValues() =>
-            new ReferencesProjectTreeCustomizablePropertyValues();
+            new();
     }
 }

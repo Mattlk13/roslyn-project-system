@@ -15,28 +15,32 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Debug
     /// </summary>
     internal class StartupProjectRegistrar : OnceInitializedOnceDisposedAsync
     {
-        private readonly IVsService<IVsStartupProjectsListService> _startupProjectsListService;
+        private readonly UnconfiguredProject _project;
+        private readonly IUnconfiguredProjectTasksService _projectTasksService;
+        private readonly IVsService<IVsStartupProjectsListService?> _startupProjectsListService;
+        private readonly IProjectThreadingService _threadingService;
         private readonly ISafeProjectGuidService _projectGuidService;
         private readonly IActiveConfiguredProjectSubscriptionService _projectSubscriptionService;
-        private readonly ActiveConfiguredProject<DebuggerLaunchProviders> _launchProviders;
+        private readonly IActiveConfiguredValues<IDebugLaunchProvider> _launchProviders;
 
         private Guid _projectGuid;
         private IDisposable? _subscription;
 
-        /// <remarks>
-        /// <see cref="UnconfiguredProject"/> must be imported in the constructor in order for scope of this class' export to be correct.
-        /// </remarks>
         [ImportingConstructor]
         public StartupProjectRegistrar(
             UnconfiguredProject project,
-            IVsService<SVsStartupProjectsListService, IVsStartupProjectsListService> startupProjectsListService,
+            IUnconfiguredProjectTasksService projectTasksService,
+            IVsService<SVsStartupProjectsListService, IVsStartupProjectsListService?> startupProjectsListService,
             IProjectThreadingService threadingService,
             ISafeProjectGuidService projectGuidService,
             IActiveConfiguredProjectSubscriptionService projectSubscriptionService,
-            ActiveConfiguredProject<DebuggerLaunchProviders> launchProviders)
+            IActiveConfiguredValues<IDebugLaunchProvider> launchProviders)
         : base(threadingService.JoinableTaskContext)
         {
+            _project = project;
+            _projectTasksService = projectTasksService;
             _startupProjectsListService = startupProjectsListService;
+            _threadingService = threadingService;
             _projectGuidService = projectGuidService;
             _projectSubscriptionService = projectSubscriptionService;
             _launchProviders = launchProviders;
@@ -46,7 +50,14 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Debug
         [AppliesTo(ProjectCapability.DotNet)]
         public Task InitializeAsync()
         {
-            return InitializeAsync(CancellationToken.None);
+            _threadingService.RunAndForget(async () =>
+            {
+                await _projectTasksService.SolutionLoadedInHost;
+
+                await InitializeAsync(CancellationToken.None);
+            }, _project);
+
+            return Task.CompletedTask;
         }
 
         protected override async Task InitializeCoreAsync(CancellationToken cancellationToken)
@@ -56,7 +67,8 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Debug
             Assumes.False(_projectGuid == Guid.Empty);
 
             _subscription = _projectSubscriptionService.ProjectRuleSource.SourceBlock.LinkToAsyncAction(
-                target: OnProjectChangedAsync);
+                target: OnProjectChangedAsync,
+                _project);
         }
 
         protected override Task DisposeCoreAsync(bool initialized)
@@ -69,48 +81,44 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Debug
             return Task.CompletedTask;
         }
 
-        internal async Task OnProjectChangedAsync(IProjectVersionedValue<IProjectSubscriptionUpdate>? e = null)
+        internal Task OnProjectChangedAsync(IProjectVersionedValue<IProjectSubscriptionUpdate>? _ = null)
         {
-            bool isDebuggable = await _launchProviders.Value.IsDebuggableAsync();
-
-            IVsStartupProjectsListService startupProjectsListService = await _startupProjectsListService.GetValueAsync();
-
-            if (isDebuggable)
+            return _projectTasksService.LoadedProjectAsync(async () =>
             {
-                // If we're already registered, the service no-ops
-                startupProjectsListService.AddProject(ref _projectGuid);
-            }
-            else
-            {
-                // If we're already unregistered, the service no-ops
-                startupProjectsListService.RemoveProject(ref _projectGuid);
-            }
-        }
+                bool isDebuggable = await IsDebuggableAsync();
 
-        [Export]
-        internal class DebuggerLaunchProviders
-        {
-            [ImportingConstructor]
-            public DebuggerLaunchProviders(ConfiguredProject project)
-            {
-                Debuggers = new OrderPrecedenceImportCollection<IDebugLaunchProvider>(projectCapabilityCheckProvider: project);
-            }
+                IVsStartupProjectsListService? startupProjectsListService = await _startupProjectsListService.GetValueAsync();
 
-            [ImportMany]
-            public OrderPrecedenceImportCollection<IDebugLaunchProvider> Debuggers { get; }
-
-            public async Task<bool> IsDebuggableAsync()
-            {
-                foreach (Lazy<IDebugLaunchProvider> provider in Debuggers)
+                if (startupProjectsListService == null)
                 {
-                    if (await provider.Value.CanLaunchAsync(DebugLaunchOptions.DesignTimeExpressionEvaluation))
-                    {
-                        return true;
-                    }
+                    return;
                 }
 
-                return false;
+                if (isDebuggable)
+                {
+                    // If we're already registered, the service no-ops
+                    startupProjectsListService.AddProject(ref _projectGuid);
+                }
+                else
+                {
+                    // If we're already unregistered, the service no-ops
+                    startupProjectsListService.RemoveProject(ref _projectGuid);
+                }
+            });
+        }
+
+        private async Task<bool> IsDebuggableAsync()
+        {
+            foreach (Lazy<IDebugLaunchProvider> provider in _launchProviders.Values)
+            {
+                if (provider.Value is IStartupProjectProvider startupProjectProvider &&
+                    await startupProjectProvider.CanBeStartupProjectAsync(DebugLaunchOptions.DesignTimeExpressionEvaluation))
+                {
+                    return true;
+                }
             }
+
+            return false;
         }
     }
 }

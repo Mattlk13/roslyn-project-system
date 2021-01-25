@@ -19,13 +19,13 @@ namespace Microsoft.VisualStudio.ProjectSystem.Utilities
         /// <summary>
         /// The CPS trace source.
         /// </summary>
-        internal static readonly TraceSource Source = new TraceSource("CPS");
+        internal static readonly TraceSource Source = new("CPS");
 
         /// <summary>
         /// Buffer to preserve latest set of error messages to help diagnosing Watson bugs.
         /// </summary>
         private static readonly string[] s_criticalTraceBuffer = new string[CriticalTraceBufferSize];
-        private static volatile int s_currentTraceIndex = 0;
+        private static volatile int s_currentTraceIndex;
 
         /// <summary>
         /// Gives the current Travel Level setting for the CPS tracing

@@ -1,6 +1,7 @@
 ﻿' Licensed to the .NET Foundation under one or more agreements. The .NET Foundation licenses this file to you under the MIT license. See the LICENSE.md file in the project root for more information.
 
 Imports System.ComponentModel.Design
+Imports System.IO
 Imports System.Runtime.InteropServices
 
 Imports Microsoft.VisualStudio.Editors.OptionPages
@@ -11,7 +12,6 @@ Imports Microsoft.VisualStudio.XmlEditor
 <Assembly: Guid("832BFEE6-9036-423E-B90A-EA4C582DA1D2")>
 
 Namespace Microsoft.VisualStudio.Editors
-
 
     '*
     '* This is the Visual Studio package for the Microsoft.VisualStudio.Editors assembly.  It will be CoCreated by
@@ -38,6 +38,12 @@ Namespace Microsoft.VisualStudio.Editors
     ProvideEditorFactory(GetType(SettingsDesigner.SettingsDesignerEditorFactory), 1200, True, TrustLevel:=__VSEDITORTRUSTLEVEL.ETL_AlwaysTrusted, CommonPhysicalViewAttributes:=3),
     ProvideEditorFactory(GetType(PropPageDesigner.PropPageDesignerEditorFactory), 1400, False, TrustLevel:=__VSEDITORTRUSTLEVEL.ETL_AlwaysTrusted),
     ProvideEditorFactory(GetType(ResourceEditor.ResourceEditorFactory), 1100, True, TrustLevel:=__VSEDITORTRUSTLEVEL.ETL_AlwaysTrusted, CommonPhysicalViewAttributes:=3),
+    ProvideService(GetType(ResourceEditor.ResourceEditorRefactorNotify), ServiceName:="ResX RefactorNotify Service"),
+    ProvideService(GetType(AddImports.IVBAddImportsDialogService), ServiceName:="Add Imports Dialog Service"),
+    ProvideService(GetType(XmlIntellisense.IXmlIntellisenseService), ServiceName:="Vb Xml Intellisense Service"),
+    ProvideService(GetType(VBAttributeEditor.Interop.IVbPermissionSetService), ServiceName:="Vb Permission Set Service"),
+    ProvideService(GetType(Interop.IVsBuildEventCommandLineDialogService), ServiceName:="Vb Build Event Command Line Dialog Service"),
+    ProvideService(GetType(VBRefChangedSvc.Interop.IVbReferenceChangedService), ServiceName:="VB Project Reference Changed Service"),
     ProvideKeyBindingTable(Constants.MenuConstants.GUID_SETTINGSDESIGNER_CommandUIString, 1200, AllowNavKeyBinding:=False),
     ProvideKeyBindingTable(Constants.MenuConstants.GUID_RESXEditorCommandUIString, 1100, AllowNavKeyBinding:=False),
     CLSCompliant(False)
@@ -255,9 +261,9 @@ Namespace Microsoft.VisualStudio.Editors
         ''' </summary>
         ''' <param name="key">Added in the constructor using AddOptionKey </param>
         ''' <param name="stream">Stream to read from</param>
-        Protected Overrides Sub OnLoadOptions(key As String, stream As IO.Stream)
+        Protected Overrides Sub OnLoadOptions(key As String, stream As Stream)
             If String.Equals(key, ProjectDesignerSUOKey, StringComparison.Ordinal) Then
-                Dim reader As New IO.BinaryReader(stream)
+                Dim reader As New BinaryReader(stream)
                 Dim buf(15) As Byte ' Space enough for a GUID - 16 bytes...
                 Try
                     While reader.Read(buf, 0, buf.Length) = buf.Length
@@ -281,7 +287,7 @@ Namespace Microsoft.VisualStudio.Editors
         ''' </summary>
         ''' <param name="key">Added in the constructor using AddOptionKey</param>
         ''' <param name="stream">Stream to read data from</param>
-        Protected Overrides Sub OnSaveOptions(key As String, stream As IO.Stream)
+        Protected Overrides Sub OnSaveOptions(key As String, stream As Stream)
             If String.Equals(key, ProjectDesignerSUOKey, StringComparison.Ordinal) Then
                 ' This is the project designer's last active tab
                 If _lastViewedProjectDesignerTab IsNot Nothing Then
@@ -461,8 +467,6 @@ Namespace Microsoft.VisualStudio.Editors
                 Return Interop.NativeMethods.S_OK
             End Function
 
-
-
 #Region "IVsSolutionEvents methods that simply return S_OK"
 
             Public Function OnAfterLoadProject(pStubHierarchy As IVsHierarchy, pRealHierarchy As IVsHierarchy) As Integer Implements IVsSolutionEvents.OnAfterLoadProject
@@ -500,7 +504,7 @@ Namespace Microsoft.VisualStudio.Editors
             End Function
 #End Region
 
-            Private _disposed As Boolean = False
+            Private _disposed As Boolean
 
             ' IDisposable
             Private Overloads Sub Dispose(disposing As Boolean)

@@ -8,7 +8,7 @@ namespace Microsoft.VisualStudio.ProjectSystem
 {
     internal class ProjectTreeWriter
     {
-        private readonly StringBuilder _builder = new StringBuilder();
+        private readonly StringBuilder _builder = new();
         private readonly ProjectTreeWriterOptions _options;
         private readonly IProjectTree _parent;
 
@@ -190,7 +190,7 @@ namespace Microsoft.VisualStudio.ProjectSystem
             foreach (string capability in tree.Flags.OrderBy(c => c, StringComparer.InvariantCultureIgnoreCase))
             {
                 if (writtenCapability)
-                    _builder.Append(" ");
+                    _builder.Append(' ');
 
                 writtenCapability = true;
                 _builder.Append(capability);
@@ -227,7 +227,7 @@ namespace Microsoft.VisualStudio.ProjectSystem
                 _builder.Append("[icon]");
             }
 
-            _builder.Append("}");
+            _builder.Append('}');
         }
     }
 }

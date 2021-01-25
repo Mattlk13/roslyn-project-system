@@ -20,11 +20,11 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
             _properties = properties;
         }
 
-        public override async Task<string> OnGetEvaluatedPropertyValueAsync(string evaluatedPropertyValue, IProjectProperties defaultProperties)
+        public override async Task<string> OnGetEvaluatedPropertyValueAsync(string propertyName, string evaluatedPropertyValue, IProjectProperties defaultProperties)
         {
             ConfigurationGeneral configuration = await _properties.GetConfigurationGeneralPropertiesAsync();
             string value = await configuration.OutputType.GetEvaluatedValueAtEndAsync();
-            if (GetMap.TryGetValue(value, out string returnValue))
+            if (GetMap.TryGetValue(value, out string? returnValue))
             {
                 return returnValue;
             }
@@ -33,6 +33,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Properties
         }
 
         public override async Task<string?> OnSetPropertyValueAsync(
+            string propertyName,
             string unevaluatedPropertyValue,
             IProjectProperties defaultProperties,
             IReadOnlyDictionary<string, string>? dimensionalConditions = null)

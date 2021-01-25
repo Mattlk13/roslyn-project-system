@@ -3,8 +3,8 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.ProjectSystem;
+using Microsoft.VisualStudio.ProjectSystem.Tree.Dependencies;
 using Microsoft.VisualStudio.ProjectSystem.VS;
-using Microsoft.VisualStudio.ProjectSystem.VS.Tree.Dependencies;
 using Moq;
 using Xunit;
 using static Microsoft.VisualStudio.Telemetry.ITelemetryServiceFactory;
@@ -62,7 +62,7 @@ namespace Microsoft.VisualStudio.Telemetry
         private static async Task<(bool success, TelemetryParameters? result)> CreateComponentAndGetResult(Guid guid, string? version = null)
         {
             bool success = false;
-            TelemetryParameters? result = default;
+            TelemetryParameters? result = null;
             void onTelemetryLogged(TelemetryParameters callParameters)
             {
                 success = true;

@@ -13,34 +13,28 @@ using Microsoft.VisualStudio.IO;
 using Microsoft.VisualStudio.ProjectSystem.Build;
 using Microsoft.VisualStudio.ProjectSystem.Properties;
 using Microsoft.VisualStudio.Telemetry;
-using Microsoft.VisualStudio.Threading;
 
 namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
 {
     [AppliesTo(ProjectCapability.DotNet + "+ !" + ProjectCapabilities.SharedAssetsProject)]
     [Export(typeof(IBuildUpToDateCheckProvider))]
-    [Export(ExportContractNames.Scopes.ConfiguredProject, typeof(IProjectDynamicLoadComponent))]
+    [Export(typeof(IActiveConfigurationComponent))]
     [ExportMetadata("BeforeDrainCriticalTasks", true)]
-    internal sealed partial class BuildUpToDateCheck : OnceInitializedOnceDisposedUnderLockAsync, IBuildUpToDateCheckProvider, IProjectDynamicLoadComponent
+    internal sealed partial class BuildUpToDateCheck : IBuildUpToDateCheckProvider, IActiveConfigurationComponent, IDisposable
     {
         private const string Link = "Link";
         private const string DefaultSetName = "";
+
         private static readonly StringComparer s_setNameComparer = StringComparers.ItemNames;
 
-        private static ImmutableHashSet<string> ReferenceSchemas => ImmutableStringHashSet.EmptyOrdinal
+        private static ImmutableHashSet<string> ProjectPropertiesSchemas => ImmutableStringHashSet.EmptyOrdinal
+            .Add(ConfigurationGeneral.SchemaName)
             .Add(ResolvedAnalyzerReference.SchemaName)
-            .Add(ResolvedCompilationReference.SchemaName);
-
-        private static ImmutableHashSet<string> UpToDateSchemas => ImmutableStringHashSet.EmptyOrdinal
+            .Add(ResolvedCompilationReference.SchemaName)
             .Add(CopyUpToDateMarker.SchemaName)
             .Add(UpToDateCheckInput.SchemaName)
             .Add(UpToDateCheckOutput.SchemaName)
             .Add(UpToDateCheckBuilt.SchemaName);
-
-        private static ImmutableHashSet<string> ProjectPropertiesSchemas => ImmutableStringHashSet.EmptyOrdinal
-            .Add(ConfigurationGeneral.SchemaName)
-            .Union(ReferenceSchemas)
-            .Union(UpToDateSchemas);
 
         private static ImmutableHashSet<string> NonCompilationItemTypes => ImmutableHashSet<string>.Empty
             .WithComparer(StringComparers.ItemTypes)
@@ -54,11 +48,9 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
         private readonly ITelemetryService _telemetryService;
         private readonly IFileSystem _fileSystem;
 
-        private readonly object _stateLock = new object();
+        private Subscription _subscription;
 
-        private State _state = State.Empty;
-
-        private IDisposable? _link;
+        private int _isDisposed;
 
         [ImportingConstructor]
         public BuildUpToDateCheck(
@@ -67,9 +59,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             [Import(ExportContractNames.Scopes.ConfiguredProject)] IProjectAsynchronousTasksService tasksService,
             IProjectItemSchemaService projectItemSchemaService,
             ITelemetryService telemetryService,
-            IProjectThreadingService threadingService,
             IFileSystem fileSystem)
-            : base(threadingService.JoinableTaskContext)
         {
             _projectSystemOptions = projectSystemOptions;
             _configuredProject = configuredProject;
@@ -77,73 +67,38 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             _projectItemSchemaService = projectItemSchemaService;
             _telemetryService = telemetryService;
             _fileSystem = fileSystem;
+            _subscription = new(configuredProject, projectItemSchemaService);
         }
 
-        public Task LoadAsync()
+        public Task ActivateAsync()
         {
-            return InitializeAsync();
-        }
-
-        public Task UnloadAsync()
-        {
-            return ExecuteUnderLockAsync(_ =>
-            {
-                lock (_stateLock)
-                {
-                    _link?.Dispose();
-                    _link = null;
-
-                    _state = State.Empty;
-                }
-
-                return Task.CompletedTask;
-            });
-        }
-
-        protected override Task InitializeCoreAsync(CancellationToken cancellationToken)
-        {
-            Assumes.Present(_configuredProject.Services.ProjectSubscription);
-
-            _link = ProjectDataSources.SyncLinkTo(
-                _configuredProject.Services.ProjectSubscription.JointRuleSource.SourceBlock.SyncLinkOptions(DataflowOption.WithRuleNames(ProjectPropertiesSchemas)),
-                _configuredProject.Services.ProjectSubscription.SourceItemsRuleSource.SourceBlock.SyncLinkOptions(),
-                _configuredProject.Services.ProjectSubscription.ProjectSource.SourceBlock.SyncLinkOptions(),
-                _projectItemSchemaService.SourceBlock.SyncLinkOptions(),
-                _configuredProject.Services.ProjectSubscription.ProjectCatalogSource.SourceBlock.SyncLinkOptions(),
-                target: DataflowBlockSlim.CreateActionBlock<IProjectVersionedValue<ValueTuple<IProjectSubscriptionUpdate, IProjectSubscriptionUpdate, IProjectSnapshot, IProjectItemSchema, IProjectCatalogSnapshot>>>(OnChanged),
-                linkOptions: DataflowOption.PropagateCompletion);
+            _subscription.EnsureInitialized();
 
             return Task.CompletedTask;
         }
 
-        protected override Task DisposeCoreUnderLockAsync(bool initialized)
+        public Task DeactivateAsync()
         {
-            _link?.Dispose();
+            RecycleSubscription();
 
             return Task.CompletedTask;
         }
 
-        internal void OnChanged(IProjectVersionedValue<ValueTuple<IProjectSubscriptionUpdate, IProjectSubscriptionUpdate, IProjectSnapshot, IProjectItemSchema, IProjectCatalogSnapshot>> e)
+        public void Dispose()
         {
-            lock (_stateLock)
+            if (Interlocked.CompareExchange(ref _isDisposed, 1, 0) != 0)
             {
-                if (_link == null)
-                {
-                    // We've been unloaded, so don't update the state (which will be empty)
-                    return;
-                }
-
-                var snapshot = e.Value.Item3 as IProjectSnapshot2;
-                Assumes.NotNull(snapshot);
-
-                _state = _state.Update(
-                    jointRuleUpdate: e.Value.Item1,
-                    sourceItemsUpdate: e.Value.Item2,
-                    projectSnapshot: snapshot,
-                    projectItemSchema: e.Value.Item4,
-                    projectCatalogSnapshot: e.Value.Item5,
-                    configuredProjectVersion: e.DataSourceVersions[ProjectDataSources.ConfiguredProjectVersion]);
+                return;
             }
+
+            RecycleSubscription();
+        }
+
+        private void RecycleSubscription()
+        {
+            Subscription subscription = Interlocked.Exchange(ref _subscription, new Subscription(_configuredProject, _projectItemSchemaService));
+
+            subscription.Dispose();
         }
 
         private bool CheckGlobalConditions(Log log, State state)
@@ -163,7 +118,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                 return log.Fail("Disabled", "The 'DisableFastUpToDateCheck' property is true, not up to date.");
             }
 
-            string copyAlwaysItemPath = state.ItemsByItemType.SelectMany(kvp => kvp.Value).FirstOrDefault(item => item.copyType == CopyType.CopyAlways).path;
+            if (state.LastCheckedAtUtc == DateTime.MinValue)
+            {
+                return log.Fail("FirstRun", "The up-to-date check has not yet run for this project. Not up-to-date.");
+            }
+
+            string copyAlwaysItemPath = state.ItemsByItemType.SelectMany(kvp => kvp.Value).FirstOrDefault(item => item.CopyType == CopyType.CopyAlways).Path;
 
             if (copyAlwaysItemPath != null)
             {
@@ -173,7 +133,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             return true;
         }
 
-        private bool CheckInputsAndOutputs(Log log, in TimestampCache timestampCache, State state)
+        private bool CheckInputsAndOutputs(Log log, in TimestampCache timestampCache, State state, CancellationToken token)
         {
             // UpToDateCheckInput/Output/Built items have optional 'Set' metadata that determine whether they
             // are treated separately or not. If omitted, such inputs/outputs are included in the default set,
@@ -210,6 +170,8 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
 
                 foreach (string output in outputs)
                 {
+                    token.ThrowIfCancellationRequested();
+
                     DateTime? outputTime = timestampCache.GetTimestampUtc(output);
 
                     if (outputTime == null)
@@ -237,11 +199,29 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
 
                 if (earliestOutputTime < state.LastItemsChangedAtUtc)
                 {
-                    return log.Fail("Outputs", "The set of project items was changed more recently ({0}) than the earliest output '{1}' ({2}), not up to date.", state.LastItemsChangedAtUtc, earliestOutputPath, earliestOutputTime);
+                    bool fail = log.Fail("Outputs", "The set of project items was changed more recently ({0}) than the earliest output '{1}' ({2}), not up to date.", state.LastItemsChangedAtUtc, earliestOutputPath, earliestOutputTime);
+                    foreach ((bool isAdd, string itemType, string path, string? link, CopyType copyType) in state.LastItemChanges)
+                    {
+                        if (Strings.IsNullOrEmpty(link))
+                            log.Info("    {0} item {1} '{2}' (CopyType={3})", itemType, isAdd ? "added" : "removed", path, copyType);
+                        else
+                            log.Info("    {0} item {1} '{2}' (CopyType={3}, Link='{4}')", itemType, isAdd ? "added" : "removed", path, copyType, link);
+                    }
+                    return fail;
                 }
+
+#if FALSE // https://github.com/dotnet/project-system/issues/6227
+
+                if (_enableAdditionalDependentFile && earliestOutputTime < state.LastAdditionalDependentFileTimesChangedAtUtc)
+                {
+                    return log.Fail("Outputs", "The set of AdditionalDependentFileTimes was changed more recently ({0}) than the earliest output '{1}' ({2}), not up to date.", state.LastAdditionalDependentFileTimesChangedAtUtc, earliestOutputPath, earliestOutputTime);
+                }
+#endif
 
                 foreach ((string input, bool isRequired) in inputs)
                 {
+                    token.ThrowIfCancellationRequested();
+
                     DateTime? inputTime = timestampCache.GetTimestampUtc(input);
 
                     if (inputTime == null)
@@ -261,7 +241,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                         return log.Fail("Outputs", "Input '{0}' is newer ({1}) than earliest output '{2}' ({3}), not up to date.", input, inputTime.Value, earliestOutputPath, earliestOutputTime);
                     }
 
-                    if (inputTime > _state.LastCheckedAtUtc)
+                    if (inputTime > state.LastCheckedAtUtc)
                     {
                         return log.Fail("Outputs", "Input '{0}' ({1}) has been modified since the last up-to-date check ({2}), not up to date.", input, inputTime.Value, state.LastCheckedAtUtc);
                     }
@@ -315,17 +295,17 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                     }
                 }
 
-                if (state.ResolvedAnalyzerReferencePaths.Count != 0)
+                if (!state.ResolvedAnalyzerReferencePaths.IsEmpty)
                 {
                     log.Verbose("Adding " + ResolvedAnalyzerReference.SchemaName + " inputs:");
-                    foreach (string input in state.ResolvedAnalyzerReferencePaths)
+                    foreach (string input in state.ResolvedAnalyzerReferencePaths.Select(_configuredProject.UnconfiguredProject.MakeRooted))
                     {
                         log.Verbose("    '{0}'", input);
                         yield return (Path: input, IsRequired: true);
                     }
                 }
 
-                if (state.ResolvedCompilationReferencePaths.Count != 0)
+                if (!state.ResolvedCompilationReferencePaths.IsEmpty)
                 {
                     log.Verbose("Adding " + ResolvedCompilationReference.SchemaName + " inputs:");
                     foreach (string input in state.ResolvedCompilationReferencePaths)
@@ -335,7 +315,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                     }
                 }
 
-                if (state.UpToDateCheckInputItemsBySetName.TryGetValue(DefaultSetName, out ImmutableHashSet<string> upToDateCheckInputItems))
+                if (state.UpToDateCheckInputItemsBySetName.TryGetValue(DefaultSetName, out ImmutableHashSet<string>? upToDateCheckInputItems))
                 {
                     log.Verbose("Adding " + UpToDateCheckInput.SchemaName + " inputs:");
                     foreach (string input in upToDateCheckInputItems.Select(_configuredProject.UnconfiguredProject.MakeRooted))
@@ -345,7 +325,9 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                     }
                 }
 
-                if (state.AdditionalDependentFileTimes.Count != 0)
+#if FALSE // https://github.com/dotnet/project-system/issues/6227
+
+                if (_enableAdditionalDependentFile && state.AdditionalDependentFileTimes.Count != 0)
                 {
                     log.Verbose("Adding " + nameof(state.AdditionalDependentFileTimes) + " inputs:");
                     foreach ((string input, DateTime _) in state.AdditionalDependentFileTimes)
@@ -354,11 +336,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                         yield return (Path: input, IsRequired: false);
                     }
                 }
+#endif
             }
 
             IEnumerable<string> CollectDefaultOutputs()
             {
-                if (state.UpToDateCheckOutputItemsBySetName.TryGetValue(DefaultSetName, out ImmutableHashSet<string> upToDateCheckOutputItems))
+                if (state.UpToDateCheckOutputItemsBySetName.TryGetValue(DefaultSetName, out ImmutableHashSet<string>? upToDateCheckOutputItems))
                 {
                     log.Verbose("Adding " + UpToDateCheckOutput.SchemaName + " outputs:");
 
@@ -369,7 +352,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                     }
                 }
 
-                if (state.UpToDateCheckBuiltItemsBySetName.TryGetValue(DefaultSetName, out ImmutableHashSet<string> upToDateCheckBuiltItems))
+                if (state.UpToDateCheckBuiltItemsBySetName.TryGetValue(DefaultSetName, out ImmutableHashSet<string>? upToDateCheckBuiltItems))
                 {
                     log.Verbose("Adding " + UpToDateCheckBuilt.SchemaName + " outputs:");
 
@@ -383,7 +366,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
 
             IEnumerable<(string Path, bool IsRequired)> CollectSetInputs(string setName)
             {
-                if (state.UpToDateCheckInputItemsBySetName.TryGetValue(setName, out ImmutableHashSet<string> upToDateCheckInputItems))
+                if (state.UpToDateCheckInputItemsBySetName.TryGetValue(setName, out ImmutableHashSet<string>? upToDateCheckInputItems))
                 {
                     log.Verbose("Adding " + UpToDateCheckInput.SchemaName + " inputs in set '{0}':", setName);
                     foreach (string input in upToDateCheckInputItems.Select(_configuredProject.UnconfiguredProject.MakeRooted))
@@ -396,7 +379,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
 
             IEnumerable<string> CollectSetOutputs(string setName)
             {
-                if (state.UpToDateCheckOutputItemsBySetName.TryGetValue(setName, out ImmutableHashSet<string> upToDateCheckOutputItems))
+                if (state.UpToDateCheckOutputItemsBySetName.TryGetValue(setName, out ImmutableHashSet<string>? upToDateCheckOutputItems))
                 {
                     log.Verbose("Adding " + UpToDateCheckOutput.SchemaName + " outputs in set '{0}':", setName);
 
@@ -407,7 +390,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                     }
                 }
 
-                if (state.UpToDateCheckBuiltItemsBySetName.TryGetValue(setName, out ImmutableHashSet<string> upToDateCheckBuiltItems))
+                if (state.UpToDateCheckBuiltItemsBySetName.TryGetValue(setName, out ImmutableHashSet<string>? upToDateCheckBuiltItems))
                 {
                     log.Verbose("Adding " + UpToDateCheckBuilt.SchemaName + " outputs in set '{0}':", setName);
 
@@ -429,7 +412,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             // here if the project actually produced a marker and we only check it against references that
             // actually produced a marker.
 
-            if (string.IsNullOrWhiteSpace(state.CopyUpToDateMarkerItem) || !state.CopyReferenceInputs.Any())
+            if (Strings.IsNullOrWhiteSpace(state.CopyUpToDateMarkerItem) || !state.CopyReferenceInputs.Any())
             {
                 return true;
             }
@@ -476,10 +459,12 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             return true;
         }
 
-        private bool CheckCopiedOutputFiles(Log log, in TimestampCache timestampCache, State state)
+        private bool CheckCopiedOutputFiles(Log log, in TimestampCache timestampCache, State state, CancellationToken token)
         {
             foreach ((string destinationRelative, string sourceRelative) in state.CopiedOutputFiles)
             {
+                token.ThrowIfCancellationRequested();
+
                 string source = _configuredProject.UnconfiguredProject.MakeRooted(sourceRelative);
                 string destination = _configuredProject.UnconfiguredProject.MakeRooted(destinationRelative);
 
@@ -516,14 +501,16 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             return true;
         }
 
-        private bool CheckCopyToOutputDirectoryFiles(Log log, in TimestampCache timestampCache, State state)
+        private bool CheckCopyToOutputDirectoryFiles(Log log, in TimestampCache timestampCache, State state, CancellationToken token)
         {
-            IEnumerable<(string path, string? link, CopyType copyType)> items = state.ItemsByItemType.SelectMany(kvp => kvp.Value).Where(item => item.copyType == CopyType.CopyIfNewer);
+            IEnumerable<(string Path, string? Link, CopyType CopyType)> items = state.ItemsByItemType.SelectMany(kvp => kvp.Value).Where(item => item.CopyType == CopyType.CopyIfNewer);
 
             string outputFullPath = Path.Combine(state.MSBuildProjectDirectory, state.OutputRelativeOrFullPath);
 
             foreach ((string path, string? link, _) in items)
             {
+                token.ThrowIfCancellationRequested();
+
                 string rootedPath = _configuredProject.UnconfiguredProject.MakeRooted(path);
                 string filename = Strings.IsNullOrEmpty(link) ? rootedPath : link;
 
@@ -568,44 +555,48 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
             return true;
         }
 
-        public Task<bool> IsUpToDateAsync(BuildAction buildAction, TextWriter logWriter, CancellationToken cancellationToken = default)
+        public async Task<bool> IsUpToDateAsync(BuildAction buildAction, TextWriter logWriter, CancellationToken cancellationToken = default)
         {
+            if (Volatile.Read(ref _isDisposed) != 0)
+            {
+                throw new ObjectDisposedException(nameof(BuildUpToDateCheck));
+            }
+
             if (buildAction != BuildAction.Build)
             {
-                return TaskResult.False;
+                return false;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            return ExecuteUnderLockAsync(IsUpToDateInternalAsync, cancellationToken);
+            // Start the stopwatch now, so we include any lock acquisition in the timing
+            var sw = Stopwatch.StartNew();
 
-            async Task<bool> IsUpToDateInternalAsync(CancellationToken token)
+            Subscription subscription = Volatile.Read(ref _subscription);
+
+            return await subscription.RunAsync(IsUpToDateInternalAsync, cancellationToken);
+
+            async Task<bool> IsUpToDateInternalAsync(State state, CancellationToken token)
             {
                 token.ThrowIfCancellationRequested();
 
-                var sw = Stopwatch.StartNew();
-
-                await InitializeAsync(token);
+                // Short-lived cache of timestamp by path
+                var timestampCache = new TimestampCache(_fileSystem);
 
                 LogLevel requestedLogLevel = await _projectSystemOptions.GetFastUpToDateLoggingLevelAsync(token);
-                var logger = new Log(logWriter, requestedLogLevel, _configuredProject.UnconfiguredProject.FullPath ?? "", _telemetryService);
+                var logger = new Log(logWriter, requestedLogLevel, sw, timestampCache, _configuredProject.UnconfiguredProject.FullPath ?? "", _telemetryService);
 
                 try
                 {
-                    State state = _state;
-
                     if (!CheckGlobalConditions(logger, state))
                     {
                         return false;
                     }
 
-                    // Short-lived cache of timestamp by path
-                    var timestampCache = new TimestampCache(_fileSystem);
-
-                    if (!CheckInputsAndOutputs(logger, timestampCache, state) ||
+                    if (!CheckInputsAndOutputs(logger, timestampCache, state, token) ||
                         !CheckMarkers(logger, timestampCache, state) ||
-                        !CheckCopyToOutputDirectoryFiles(logger, timestampCache, state) ||
-                        !CheckCopiedOutputFiles(logger, timestampCache, state))
+                        !CheckCopyToOutputDirectoryFiles(logger, timestampCache, state, token) ||
+                        !CheckCopiedOutputFiles(logger, timestampCache, state, token))
                     {
                         return false;
                     }
@@ -615,11 +606,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                 }
                 finally
                 {
-                    lock (_stateLock)
-                    {
-                        _state = _state.WithLastCheckedAtUtc(DateTime.UtcNow);
-                    }
-
                     logger.Verbose("Up to date check completed in {0:N1} ms", sw.Elapsed.TotalMilliseconds);
                 }
             }
@@ -639,20 +625,32 @@ namespace Microsoft.VisualStudio.ProjectSystem.UpToDate
                 _check = check;
             }
 
-            public State State => _check._state;
+            public State State => _check._subscription.State;
 
             public void SetLastCheckedAtUtc(DateTime lastCheckedAtUtc)
             {
-                _check._state = _check._state.WithLastCheckedAtUtc(lastCheckedAtUtc);
+                _check._subscription.State = _check._subscription.State.WithLastCheckedAtUtc(lastCheckedAtUtc);
             }
 
             public void SetLastItemsChangedAtUtc(DateTime lastItemsChangedAtUtc)
             {
-                _check._state = _check._state.WithLastItemsChangedAtUtc(lastItemsChangedAtUtc);
+                _check._subscription.State = _check._subscription.State.WithLastItemsChangedAtUtc(lastItemsChangedAtUtc);
+            }
+
+            public void SetLastAdditionalDependentFileTimesChangedAtUtc(DateTime lastAdditionalDependentFileTimesChangedAtUtc)
+            {
+                _check._subscription.State = _check._subscription.State.WithLastAdditionalDependentFilesChangedAtUtc(lastAdditionalDependentFileTimesChangedAtUtc);
+            }
+
+            public void OnChanged(IProjectVersionedValue<(IProjectSubscriptionUpdate, IProjectSubscriptionUpdate, IProjectSnapshot, IProjectItemSchema, IProjectCatalogSnapshot)> value)
+            {
+                _check._subscription.OnChanged(value);
             }
         }
 
         /// <summary>For unit testing only.</summary>
-        internal TestAccessor TestAccess => new TestAccessor(this);
+#pragma warning disable RS0043 // Do not call 'GetTestAccessor()'
+        internal TestAccessor TestAccess => new(this);
+#pragma warning restore RS0043
     }
 }

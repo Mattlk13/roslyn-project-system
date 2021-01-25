@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Microsoft.VisualStudio.ProjectSystem.Rules;
 using Microsoft.VisualStudio.Utilities;
 using Xunit;
 using Xunit.Abstractions;
@@ -13,9 +14,9 @@ namespace Microsoft.VisualStudio.Setup
 {
     public sealed class SwrTests
     {
-        private static readonly Regex _swrFolderPattern = new Regex(@"^\s*folder\s+""(?<path>[^""]+)""\s*$", RegexOptions.Compiled);
-        private static readonly Regex _swrFilePattern = new Regex(@"^\s*file\s+source=""(?<path>[^""]+)""\s*$", RegexOptions.Compiled);
-        private static readonly Regex _xlfFilePattern = new Regex(@"^(?<filename>.+\.xaml)\.(?<culture>[^.]+)\.xlf$", RegexOptions.Compiled);
+        private static readonly Regex _swrFolderPattern = new(@"^\s*folder\s+""(?<path>[^""]+)""\s*$", RegexOptions.Compiled);
+        private static readonly Regex _swrFilePattern = new(@"^\s*file\s+source=""(?<path>[^""]+)""\s*$", RegexOptions.Compiled);
+        private static readonly Regex _xlfFilePattern = new(@"^(?<filename>.+\.xaml)\.(?<culture>[^.]+)\.xlf$", RegexOptions.Compiled);
 
         private readonly ITestOutputHelper _output;
 
@@ -26,11 +27,12 @@ namespace Microsoft.VisualStudio.Setup
         {
             var rootPath = RepoUtil.FindRepoRootPath();
 
+            var commonFilesFileName = "CommonFiles.swr";
             var swrPath = Path.Combine(
                 rootPath,
                 "setup",
                 "Microsoft.VisualStudio.ProjectSystem.Managed.CommonFiles",
-                "CommonFiles.swr");
+                commonFilesFileName);
 
             var setupFilesByCulture = ReadSwrFiles(swrPath)
                 .Select(ParseSwrFile)
@@ -63,6 +65,12 @@ namespace Microsoft.VisualStudio.Setup
                 var setupFiles = setupFilesByCulture[culture];
                 var ruleFiles = ruleFilesByCulture[culture];
 
+                var embeddedRules = RuleServices.GetAllEmbeddedRules()
+                                                .Select(name => name + ".xaml");
+
+                // Exclude the ones that are embedded, they won't be installed
+                ruleFiles = ruleFiles.Except(embeddedRules);
+
                 foreach (var missing in ruleFiles.Except(setupFiles, StringComparer.OrdinalIgnoreCase))
                 {
                     guilty = true;
@@ -76,7 +84,7 @@ namespace Microsoft.VisualStudio.Setup
                 }
             }
 
-            Assert.False(guilty, "See test output for details");
+            Assert.False(guilty, $"There are setup errors in {commonFilesFileName}. See test output for details.");
 
             return;
 
@@ -114,7 +122,7 @@ namespace Microsoft.VisualStudio.Setup
 
                 return (null, null);
             }
-        }        
+        }
 
         private static IEnumerable<(string Folder, string File)> ReadSwrFiles(string path)
         {

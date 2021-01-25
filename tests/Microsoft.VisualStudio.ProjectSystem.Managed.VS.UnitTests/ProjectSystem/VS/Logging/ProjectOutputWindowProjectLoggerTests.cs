@@ -76,7 +76,7 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Logging
             var pane = IVsOutputWindowPaneFactory.ImplementOutputStringThreadSafe((text) => { wasCalled = true; });
             var logger = CreateDisabledLogger(pane);
 
-            logger.WriteLine("Text", new object[] { });
+            logger.WriteLine("Text", 1, 2, 3, 4);
 
             Assert.False(wasCalled);
         }
@@ -106,7 +106,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Logging
         [InlineData("{0} World!",   "Hello",                "Hello World!")]
         public void WriteLine2_WhenEnabled_LogsToOutputPane(string format, object? argument, string expected)
         {   // Not looking for exhaustive tests, just enough to indicate we're calling string.Format
-
             string? result = null;
             var pane = IVsOutputWindowPaneFactory.ImplementOutputStringThreadSafe((text) => { result = text; });
             var logger = CreateEnabledLogger(pane);
@@ -126,7 +125,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Logging
         [InlineData("{0} {1}!",         "1",         "2",                  "1 2!")]
         public void WriteLine3_WhenEnabled_LogsToOutputPane(string format, object? argument1, object? argument2, string expected)
         {   // Not looking for exhaustive tests, just enough to indicate we're calling string.Format
-
             string? result = null;
             var pane = IVsOutputWindowPaneFactory.ImplementOutputStringThreadSafe((text) => { result = text; });
             var logger = CreateEnabledLogger(pane);
@@ -147,7 +145,6 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Logging
         [InlineData("{0} {1} {2}!",      "1",         "2",          "3",                "1 2 3!")]
         public void WriteLine4_WhenEnabled_LogsToOutputPane(string format, object? argument1, object? argument2, object? argument3, string expected)
         {   // Not looking for exhaustive tests, just enough to indicate we're calling string.Format
-
             string? result = null;
             var pane = IVsOutputWindowPaneFactory.ImplementOutputStringThreadSafe((text) => { result = text; });
             var logger = CreateEnabledLogger(pane);
@@ -158,15 +155,10 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Logging
         }
 
         [Theory] // Format               Arguments                                          Expected
-        [InlineData("",                  new object?[] { null },                             "")]
-        [InlineData("{0}",               new object?[] { null },                             "")]
-        [InlineData("{0}{1}",            new object?[] { null, null },                       "")]
-        [InlineData("{0}{1}{2}",         new object?[] { null, null, null },                 "")]
         [InlineData("{0}{1}{2}{3}",      new object?[] { null, null, null, null },           "")]
         [InlineData("{0} {1} {2} {3}!",  new object?[] { "Why", "Hello", "Again", "World"},  "Why Hello Again World!")]
         public void WriteLine5_WhenEnabled_LogsToOutputPane(string format, object?[] arguments, string expected)
         {   // Not looking for exhaustive tests, just enough to indicate we're calling string.Format
-
             string? result = null;
             var pane = IVsOutputWindowPaneFactory.ImplementOutputStringThreadSafe((text) => { result = text; });
             var logger = CreateEnabledLogger(pane);
@@ -174,6 +166,18 @@ namespace Microsoft.VisualStudio.ProjectSystem.VS.Logging
             logger.WriteLine(format, arguments);
 
             Assert.Equal(expected + Environment.NewLine, result);
+        }
+
+        [Theory] // Arguments
+        [InlineData(new object[] { new object?[] { null }             })]
+        [InlineData(new object[] { new object?[] { null, null }       })]
+        [InlineData(new object[] { new object?[] { null, null, null } })]
+        public void WriteLine_ThrowsWhenArrayPassedWithFewerThanFourElements(object?[] arguments)
+        {
+            var pane = IVsOutputWindowPaneFactory.ImplementOutputStringThreadSafe(_ => throw Assumes.NotReachable());
+            var logger = CreateEnabledLogger(pane);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => logger.WriteLine("", arguments));
         }
 
         [Fact]

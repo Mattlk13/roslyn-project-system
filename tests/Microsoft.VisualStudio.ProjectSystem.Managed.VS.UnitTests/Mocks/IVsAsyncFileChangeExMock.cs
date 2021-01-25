@@ -12,8 +12,8 @@ namespace Microsoft.VisualStudio.Shell
     public class IVsAsyncFileChangeExMock : IVsAsyncFileChangeEx
     {
         private uint _lastCookie;
-        private readonly Dictionary<uint, string> _watchedFiles = new Dictionary<uint, string>();
-        private readonly HashSet<string> _uniqueFilesWatched = new HashSet<string>();
+        private readonly Dictionary<uint, string> _watchedFiles = new();
+        private readonly HashSet<string> _uniqueFilesWatched = new();
 
         public IEnumerable<string> UniqueFilesWatched => _uniqueFilesWatched;
 
@@ -56,6 +56,11 @@ namespace Microsoft.VisualStudio.Shell
         }
 
         public Task<string> UnadviseDirChangeAsync(uint cookie, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public System.Threading.Tasks.Task FilterDirectoryChangesAsync(uint cookie, string[] extensions, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
